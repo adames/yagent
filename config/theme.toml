@@ -1,0 +1,16 @@
+# yagent theme — colors for the five agent states.
+# These are referenced by the plugin (status.lua M.color) and documented here so
+# they are easy to retheme. Color names follow yazi/ratatui conventions.
+#
+#   working   -> cyan        (busy, making progress; ignore)
+#   needs-you -> green bold   (HERO state: finished a turn / asking; jump in)
+#   idle      -> darkgray     (spinning up)
+#   done      -> gray         (ended / complete)
+#   error     -> red          (crashed / failed)
+
+[yagent.states]
+working   = { fg = "cyan" }
+needs_you = { fg = "green", bold = true }
+idle      = { fg = "darkgray" }
+done      = { fg = "gray" }
+error     = { fg = "red" }

@@ -1,0 +1,20 @@
+{
+  "SessionStart": [
+    { "matcher": "", "hooks": [ { "type": "command", "command": "$YAGENT_HOOK session-start" } ] }
+  ],
+  "UserPromptSubmit": [
+    { "matcher": "", "hooks": [ { "type": "command", "command": "$YAGENT_HOOK prompt" } ] }
+  ],
+  "PreToolUse": [
+    { "matcher": "", "hooks": [ { "type": "command", "command": "$YAGENT_HOOK pre-tool" } ] }
+  ],
+  "PostToolUse": [
+    { "matcher": "", "hooks": [ { "type": "command", "command": "$YAGENT_HOOK post-tool" } ] }
+  ],
+  "Stop": [
+    { "matcher": "", "hooks": [ { "type": "command", "command": "$YAGENT_HOOK stop" } ] }
+  ],
+  "SessionEnd": [
+    { "matcher": "", "hooks": [ { "type": "command", "command": "$YAGENT_HOOK session-end" } ] }
+  ]
+}

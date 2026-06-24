@@ -1,0 +1,14 @@
+# yagent yazi.toml — minimal config for the isolated yagent profile.
+# Used when launching via `bin/yagent` with a dedicated YAZI_CONFIG_HOME, so it
+# never disturbs your normal yazi setup.
+
+[mgr]
+show_hidden    = false
+sort_by        = "alphabetical"
+sort_dir_first = true
+
+# The agent panel is rendered through a previewer plugin; see plugins/devin-agent.yazi.
+[plugin]
+prepend_previewers = [
+  { name = "*/", run = "devin-agent" },
+]

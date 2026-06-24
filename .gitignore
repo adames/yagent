@@ -1,0 +1,7 @@
+# yagent runtime artifacts
+.yagent/
+*.bak
+
+# OS / editor cruft
+.DS_Store
+*.swp

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# yagent — launch yazi as an agent-aware file manager.
+#
+# Opens yazi rooted at the given directory (default: cwd). Uses your normal yazi
+# config if yagent has been installed (./install.sh), which symlinks the plugin
+# and merges the keymap.
+#
+# Usage:
+#   yagent [dir]
+
+set -euo pipefail
+
+command -v yazi >/dev/null || { echo "yagent: yazi is not installed" >&2; exit 1; }
+command -v devin >/dev/null || echo "yagent: warning: 'devin' not found on PATH" >&2
+command -v tmux  >/dev/null || echo "yagent: warning: 'tmux' not found on PATH" >&2
+
+ROOT="${1:-$PWD}"
+exec yazi "$ROOT"
