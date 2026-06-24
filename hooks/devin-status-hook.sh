@@ -18,8 +18,10 @@ EVENT="${1:-unknown}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STATEDIR_SH="$HERE/../scripts/statedir.sh"
 
-# The hook runs inside the agent's working directory.
-WORKDIR="$(pwd -P)"
+# Devin sets DEVIN_PROJECT_DIR to the project root for every hook; prefer it and
+# fall back to the current directory.
+WORKDIR="${DEVIN_PROJECT_DIR:-$(pwd -P)}"
+WORKDIR="$(cd "$WORKDIR" 2>/dev/null && pwd -P || printf '%s' "$WORKDIR")"
 
 # Slurp stdin (may be empty for some events). Keep it small/safe.
 PAYLOAD="$(cat 2>/dev/null || true)"
