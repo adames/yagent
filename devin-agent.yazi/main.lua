@@ -33,11 +33,48 @@ local GLYPHS = {
 }
 
 -- ── helpers ────────────────────────────────────────────────────────────────
+
+-- Find the directory containing yagent shell scripts.
+-- Order: explicit env var -> plugin-relative -> global install.
 local function scripts_dir()
-	return os.getenv("YAGENT_SCRIPTS")
+	local explicit = os.getenv("YAGENT_SCRIPTS")
+	if explicit then
+		return explicit
+	end
+
+	-- Try to derive the plugin directory from this file's source path.
+	-- yazi loads plugins from ~/.config/yazi/plugins/<name>.yazi/main.lua
+	local info = debug.getinfo(1, "S")
+	if info and info.source then
+		local src = info.source
+		if src:sub(1, 1) == "@" then
+			local path = src:sub(2)
+			local dir = path:match("(.*/)")
+			if dir then
+				local candidate = dir .. "scripts"
+				local probe = Command("bash"):arg("-c"):arg("test -f '" .. candidate .. "/agents.sh' && echo ok")
+				local out = probe:output()
+				if out and out.stdout:match("ok") then
+					return candidate
+				end
+			end
+		end
+	end
+
+	-- Global install location (set up by install.sh).
+	local home = os.getenv("HOME") or ""
+	local global = home .. "/.local/share/yagent/scripts"
+	local probe = Command("bash"):arg("-c"):arg("test -f '" .. global .. "/agents.sh' && echo ok")
+	local out = probe:output()
+	if out and out.stdout:match("ok") then
+		return global
+	end
+
+	return nil
 end
 
 -- Run a yagent shell script and return its stdout (or "" on failure).
+-- Notifies the user if the script directory cannot be found.
 local function run(script, args)
 	local dir = scripts_dir()
 	if not dir then
@@ -254,8 +291,14 @@ local hovered_dir = ya.sync(function()
 end)
 
 local function need_scripts()
-	if not scripts_dir() then
-		ya.notify({ title = "yagent", content = "YAGENT_SCRIPTS is not set; launch via `yagent`.", level = "error", timeout = 4 })
+	local dir = scripts_dir()
+	if not dir then
+		ya.notify({
+			title = "yagent",
+			content = "Scripts not found. Install via `./install.sh` or launch via `yagent`.",
+			level = "error",
+			timeout = 6,
+		})
 		return false
 	end
 	return true
@@ -333,6 +376,24 @@ function M:entry(job)
 			self:refresh()
 		end
 
+	elseif action == "clear" then
+		if not dir then
+			return
+		end
+		local row = parse_row((run("agents.sh", { "get", dir }):gsub("[\r\n]+$", "")))
+		if not row or (row.state ~= "done" and row.state ~= "dead" and row.state ~= "error") then
+			return ya.notify({ title = "yagent", content = "Only done / dead / error agents can be cleared.", timeout = 3 })
+		end
+		local yes = ya.confirm({
+			title = "Clear agent?",
+			content = "Remove the finished agent on:\n" .. dir,
+			pos = { "center", w = 60, h = 10 },
+		})
+		if yes then
+			run("agent.sh", { "kill", dir })
+			self:refresh()
+		end
+
 	elseif action == "overview" then
 		self:overview()
 
@@ -382,8 +443,9 @@ function M:overview()
 	end
 end
 
--- Re-read the agent map and trigger a re-render.
+-- Re-read the agent map, prune stale entries, and trigger a re-render.
 function M:refresh()
+	run("agents.sh", { "prune" })
 	local agents = {}
 	for line in run("agents.sh", { "list" }):gmatch("[^\r\n]+") do
 		local row = parse_row(line)

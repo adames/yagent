@@ -61,7 +61,8 @@ priority in the Agents Overview.
 | `a`   | Attach to the agent on the hovered folder (resume its REPL)       |
 | `s`   | Send a one-off prompt to a running agent                          |
 | `K`   | Kill agent (confirm)                                              |
-| `r`   | Refresh agent state                                               |
+| `c`   | Clear a finished agent — remove done / dead / error state       |
+| `r`   | Refresh agent state (also auto-prunes stale locks)                |
 | `g a` | Agents Overview — key menu of all agents, sorted by "needs you"   |
 | `Enter` | Open folder (unchanged)                                         |
 | `Tab` | Enter / leave the agent axis — *planned*                          |
@@ -106,39 +107,115 @@ yazi plugin reads: state file + lock + `tmux has-session` + `git -C` info
 
 ## Install
 
+### Quick start (isolated profile)
+
+Does not touch your existing yazi config:
+
 ```sh
-./install.sh                      # installs Devin lifecycle hooks (with backup)
+./install.sh                      # installs Devin lifecycle hooks + scripts
 export PATH="$PWD/bin:$PATH"       # put the launcher on your PATH
 yagent ~/code/your-repo            # open it on a repo
 ```
 
 `install.sh` installs the Devin lifecycle hooks into your user-level Devin config (backing it
-up first, and never clobbering existing hooks). The yazi side needs no install step: `bin/yagent`
-launches yazi with an **isolated** `YAZI_CONFIG_HOME` that wires in the plugin automatically, so
-your normal yazi config is untouched.
+up first, and never clobbering existing hooks). `bin/yagent` launches yazi with an **isolated**
+`YAZI_CONFIG_HOME` that wires in the plugin automatically.
+
+### Integrate into your existing yazi config
+
+```sh
+# 1. Install the plugin
+ya pkg add adames-cognition/yagent:devin-agent
+
+# 2. Install Devin hooks (required for status reporting)
+./install.sh
+
+# 3. Wire it into your yazi config
+```
+
+In your `~/.config/yazi/init.lua`:
+
+```lua
+require("devin-agent"):setup()
+```
+
+In your `~/.config/yazi/keymap.toml` (add the actions you want):
+
+```toml
+[[mgr.prepend_keymap]]
+on  = "N"
+run = "plugin devin-agent -- new"
+desc = "yagent: new agent on hovered folder"
+
+[[mgr.prepend_keymap]]
+on  = "a"
+run = "plugin devin-agent -- attach"
+desc = "yagent: attach to agent"
+
+[[mgr.prepend_keymap]]
+on  = "s"
+run = "plugin devin-agent -- send"
+desc = "yagent: send to agent"
+
+[[mgr.prepend_keymap]]
+on  = "K"
+run = "plugin devin-agent -- kill"
+desc = "yagent: kill agent"
+
+[[mgr.prepend_keymap]]
+on  = "c"
+run = "plugin devin-agent -- clear"
+desc = "yagent: clear finished agent"
+
+[[mgr.prepend_keymap]]
+on  = "r"
+run = "plugin devin-agent -- refresh"
+desc = "yagent: refresh agent state"
+
+[[mgr.prepend_keymap]]
+on  = ["g", "a"]
+run = "plugin devin-agent -- overview"
+desc = "yagent: agents overview"
+```
+
+In your `~/.config/yazi/yazi.toml`:
+
+```toml
+[[plugin.prepend_fetchers]]
+url   = "*/"
+run   = "devin-agent"
+group = "yagent"
+
+[[plugin.prepend_previewers]]
+url = "*/"
+run = "devin-agent"
+```
 
 ## Layout
 
 ```
 .
-├── install.sh                   # install Devin lifecycle hooks (with backup)
-├── bin/yagent                   # launch yazi with an isolated config, rooted at a repo
+├── devin-agent.yazi/            # yazi plugin (self-contained, installable via ya pkg)
+│   ├── main.lua                 #   fetcher + linemode badge + previewer + actions
+│   ├── README.md
+│   ├── LICENSE
+│   └── scripts/                 #   shell helpers bundled with the plugin
+│       ├── agents.sh            #     query status: list | get | prune
+│       ├── agent.sh             #     manage an agent: start / attach / send / kill
+│       ├── statedir.sh          #     dir -> state-file path helper
+│       └── worktree.sh          #     isolated-mode shadow worktrees (v0.3)
+├── bin/yagent                   # launcher: isolated yazi profile
 ├── hooks/
-│   ├── devin-status-hook.sh     # one dispatcher for all lifecycle events
+│   ├── devin-status-hook.sh     # Devin lifecycle hook dispatcher
 │   └── hooks.json
-├── plugins/devin-agent.yazi/
-│   ├── main.lua                 # fetcher + linemode badge + previewer + actions
-│   └── README.md
-├── config/                      # isolated yazi profile launched by bin/yagent
-│   ├── yazi.toml                #   registers the fetcher + previewer
-│   ├── keymap.toml              #   N / a / s / K / r bindings
-│   ├── init.lua                 #   require("devin-agent"):setup()
-│   └── theme.toml               #   color reference (states)
-└── scripts/
-    ├── agents.sh                # query status: list | get  (read-only)
-    ├── agent.sh                 # manage an agent: start / attach / send / kill (tmux + devin)
-    ├── worktree.sh              # isolated-mode shadow worktrees (v0.3)
-    └── statedir.sh              # dir -> state-file path helper
+├── config/                      # isolated yazi profile (used by bin/yagent)
+│   ├── yazi.toml
+│   ├── keymap.toml
+│   ├── init.lua
+│   └── theme.toml
+├── scripts -> devin-agent.yazi/scripts   # backward-compat symlink
+├── install.sh                   # install hooks + scripts globally
+└── README.md
 ```
 
 ## Roadmap
@@ -147,10 +224,11 @@ your normal yazi config is untouched.
   `N`/`a`/`s`/`K`/`r`, hook-driven status.
 - **v0.2 (done):** real-time badge updates via DDS push; nested-tmux attach via `switch-client`;
   "needs you" bell + header counter; live preview-panel refresh; `g a` Agents Overview.
-- **v0.2.x (next):** polish — themeable colors, config options, `Tab` agent-axis focus.
+- **v0.2.x (done):** robustness (stale-lock pruning, missing-binary checks, `clear` action);
+  `ya pkg` packaging (self-contained plugin with bundled scripts).
 - **v0.3:** isolated mode (shadow worktrees), multiple agents per folder, `--sandbox`,
   conflict hints.
-- **v0.4:** packaging, themeable colors, desktop notifications, docs.
+- **v0.4:** themeable colors/config, desktop notifications, docs.
 
 ## License
 

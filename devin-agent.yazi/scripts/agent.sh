@@ -28,6 +28,10 @@ require_tmux() {
   command -v tmux >/dev/null || { echo "yagent: tmux is required" >&2; exit 1; }
 }
 
+require_devin() {
+  command -v devin >/dev/null || { echo "yagent: devin is required" >&2; exit 1; }
+}
+
 write_lock() {
   local dir="$1" session="$2" title="$3"
   mkdir -p "$dir/.yagent"
@@ -54,6 +58,7 @@ case "$cmd" in
 
   start)
     require_tmux
+    require_devin
     dir="${1:?dir required}"; shift || true
     task="$*"
     dir="$(cd "$dir" && pwd -P)"

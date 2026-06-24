@@ -29,7 +29,7 @@ mkdir -p "$CONFIG_HOME/plugins"
 ln -sfn "$REPO/config/yazi.toml"   "$CONFIG_HOME/yazi.toml"
 ln -sfn "$REPO/config/keymap.toml" "$CONFIG_HOME/keymap.toml"
 ln -sfn "$REPO/config/init.lua"    "$CONFIG_HOME/init.lua"
-ln -sfn "$REPO/plugins/devin-agent.yazi" "$CONFIG_HOME/plugins/devin-agent.yazi"
+ln -sfn "$REPO/devin-agent.yazi" "$CONFIG_HOME/plugins/devin-agent.yazi"
 
 ROOT="${1:-$PWD}"
 exec env YAZI_CONFIG_HOME="$CONFIG_HOME" yazi --client-id "$YAGENT_YAZI_ID" "$ROOT"

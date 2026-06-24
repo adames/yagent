@@ -61,16 +61,24 @@ else
 fi
 rm -f "$RENDERED"
 
-# 3. PATH --------------------------------------------------------------------
+# 3. Scripts (global install) ------------------------------------------------
+GLOBAL_SCRIPTS="${XDG_DATA_HOME:-$HOME/.local/share}/yagent/scripts"
+mkdir -p "$GLOBAL_SCRIPTS"
+cp "$REPO"/scripts/*.sh "$GLOBAL_SCRIPTS/"
+chmod +x "$GLOBAL_SCRIPTS"/*.sh
+info "Installed scripts to $GLOBAL_SCRIPTS."
+
+# 4. PATH + usage ------------------------------------------------------------
 cat <<EOF
 
 yagent installed.
 
-Put the launcher on your PATH (add to your shell rc):
+Quick start (isolated profile — does not touch your yazi config):
   export PATH="$REPO/bin:\$PATH"
-
-Then run it on any repo:
   yagent ~/code/your-repo
 
-Inside: N new agent · a attach · s send · K kill · r refresh
+Or add the plugin to your existing yazi config:
+  ya pkg add adames-cognition/yagent:devin-agent
+
+Inside: N new · a attach · s send · K kill · c clear · r refresh · g a overview
 EOF

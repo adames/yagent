@@ -23,6 +23,11 @@ run = "plugin devin-agent -- kill"
 desc = "yagent: kill the agent (confirm)"
 
 [[mgr.prepend_keymap]]
+on  = "c"
+run = "plugin devin-agent -- clear"
+desc = "yagent: clear a finished agent (confirm)"
+
+[[mgr.prepend_keymap]]
 on  = "r"
 run = "plugin devin-agent -- refresh"
 desc = "yagent: refresh agent state"

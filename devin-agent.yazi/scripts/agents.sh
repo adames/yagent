@@ -54,6 +54,38 @@ emit_row() {
   printf '%s\t%s\t%s\t%s\t%s\n' "$dir" "$eff" "${action:-}" "$running" "${title:-}"
 }
 
+prune_one() {
+  # $1 = state file path
+  local sf="$1" json dir state running
+  json="$(tr -d '\n' < "$sf")"
+  dir="$(jget "$json" workdir)"
+  [ -z "$dir" ] && return 0
+  [ -f "$dir/.yagent/owner.json" ] || return 0
+  running="$(running_for "$dir")"
+  [ "$running" = "yes" ] && return 0
+
+  # Session is dead but lock exists -> stale.  Also remove the state file
+  # if the agent ended in a terminal state (done/dead) so it disappears
+  # from the UI instead of lingering as a ghost.
+  state="$(jget "$json" state)"
+  case "$state" in
+    done|dead|error|needs-you)
+      rm -f "$sf"
+      rm -f "$dir/.yagent/owner.json"
+      rmdir "$dir/.yagent" 2>/dev/null || true
+      ;;
+  esac
+}
+
+prune_all() {
+  [ -d "$STATE_ROOT" ] || return 0
+  local sf
+  for sf in "$STATE_ROOT"/*.json; do
+    [ -e "$sf" ] || continue
+    prune_one "$sf"
+  done
+}
+
 list_all() {
   [ -d "$STATE_ROOT" ] || return 0
   local sf
@@ -68,13 +100,16 @@ case "$cmd" in
   list)
     list_all
     ;;
+  prune)
+    prune_all
+    ;;
   get)
     dir="$(cd "${1:?usage: agents.sh get <dir>}" && pwd -P)"
     sf="$STATE_ROOT/$(printf '%s' "$dir" | shasum -a 256 | cut -d' ' -f1).json"
     [ -f "$sf" ] && emit_row "$sf" || true
     ;;
   *)
-    echo "usage: agents.sh {list|get <dir>}" >&2
+    echo "usage: agents.sh {list|get <dir>|prune}" >&2
     exit 2
     ;;
 esac
