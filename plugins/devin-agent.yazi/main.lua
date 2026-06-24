@@ -74,11 +74,40 @@ local st_agents = ya.sync(function(st)
 	return st.agents
 end)
 
--- Merge a single live update (from a DDS push) into the agent map + re-render.
+-- Count how many agents currently need the user.
+local function count_needs(agents)
+	local n = 0
+	for _, a in pairs(agents or {}) do
+		if a.state == "needs-you" then
+			n = n + 1
+		end
+	end
+	return n
+end
+
+-- Merge a single live update (from a DDS push) into the agent map. Re-renders
+-- the badge, refreshes the preview if this folder is hovered, and "summons" the
+-- user (toast + bell) when an agent first transitions into needs-you.
 local apply_update = ya.sync(function(st, row)
 	st.agents = st.agents or {}
+	local prev = st.agents[row.dir]
+	local was_needs = prev and prev.state == "needs-you"
 	st.agents[row.dir] = row
 	ui.render()
+
+	-- Live preview refresh: re-peek if we're hovering this folder right now.
+	local h = cx.active.current.hovered
+	if h and tostring(h.url) == row.dir then
+		ya.emit("peek", { cx.active.preview.skip, only_if = h.url, force = true })
+	end
+
+	-- Summon on a fresh needs-you.
+	if row.state == "needs-you" and not was_needs then
+		local what = (row.title ~= nil and row.title ~= "") and row.title or row.dir
+		ya.notify({ title = "yagent — needs you", content = what, timeout = 5 })
+		-- Best-effort audible bell; orphan = fire-and-forget, no screen takeover.
+		ya.emit("shell", { "printf '\\a' > /dev/tty 2>/dev/null", orphan = true })
+	end
 end)
 
 local function in_tmux()
@@ -141,6 +170,16 @@ function M:setup(opts)
 			running = (f[2] == "done") and "no" or "yes",
 		})
 	end)
+
+	-- Header counter: an always-visible "N needs you" chip on the right of the
+	-- top bar, so the summon is felt even when you're deep in another folder.
+	Header:children_add(function()
+		local n = count_needs(st_agents())
+		if n == 0 then
+			return ""
+		end
+		return ui.Line({ ui.Span(" ◆ " .. n .. " needs you "):fg("green"):bold() })
+	end, 9000, Header.RIGHT)
 end
 
 -- ── previewer: the agent panel (or a plain dir listing as fallback) ─────────
@@ -294,10 +333,52 @@ function M:entry(job)
 			self:refresh()
 		end
 
+	elseif action == "overview" then
+		self:overview()
+
 	elseif action == "refresh" then
 		self:refresh()
 	else
 		ya.notify({ title = "yagent", content = "unknown action: " .. tostring(action), timeout = 3 })
+	end
+end
+
+-- Repo-wide overview: a key menu of all agents, sorted "needs you" first.
+-- Picking one reveals (navigates to) its folder so you can act on it.
+local OVERVIEW_RANK = { ["needs-you"] = 0, ["working"] = 1, ["idle"] = 2, ["error"] = 3, ["done"] = 4, ["dead"] = 5 }
+local OVERVIEW_KEYS = "123456789abcdefghijklmnopqrstuvwxyz"
+
+function M:overview()
+	local rows = {}
+	for line in run("agents.sh", { "list" }):gmatch("[^\r\n]+") do
+		local r = parse_row(line)
+		if r then
+			rows[#rows + 1] = r
+		end
+	end
+	if #rows == 0 then
+		return ya.notify({ title = "yagent", content = "No agents running.", timeout = 3 })
+	end
+	table.sort(rows, function(a, b)
+		return (OVERVIEW_RANK[a.state] or 9) < (OVERVIEW_RANK[b.state] or 9)
+	end)
+
+	local cands = {}
+	for i, r in ipairs(rows) do
+		if i > #OVERVIEW_KEYS then
+			break
+		end
+		local name = r.dir:match("[^/]+$") or r.dir
+		local task = (r.title ~= nil and r.title ~= "") and ("  " .. r.title) or ""
+		cands[i] = {
+			on = OVERVIEW_KEYS:sub(i, i),
+			desc = string.format("%s %-10s %s%s", GLYPHS[r.state] or "●", r.state, name, task),
+		}
+	end
+
+	local idx = ya.which({ cands = cands })
+	if idx and rows[idx] then
+		ya.emit("reveal", { rows[idx].dir })
 	end
 end
 

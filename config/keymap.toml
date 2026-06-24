@@ -26,3 +26,8 @@ desc = "yagent: kill the agent (confirm)"
 on  = "r"
 run = "plugin devin-agent -- refresh"
 desc = "yagent: refresh agent state"
+
+[[mgr.prepend_keymap]]
+on  = ["g", "a"]
+run = "plugin devin-agent -- overview"
+desc = "yagent: agents overview (sorted by needs-you)"

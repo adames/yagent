@@ -62,9 +62,9 @@ priority in the Agents Overview.
 | `s`   | Send a one-off prompt to a running agent                          |
 | `K`   | Kill agent (confirm)                                              |
 | `r`   | Refresh agent state                                               |
+| `g a` | Agents Overview — key menu of all agents, sorted by "needs you"   |
 | `Enter` | Open folder (unchanged)                                         |
-| `Tab` | Enter / leave the agent axis — *v0.2*                             |
-| `g a` | Agents Overview (sorted by "needs you") — *v0.2*                  |
+| `Tab` | Enter / leave the agent axis — *planned*                          |
 | `I`   | New **isolated** agent (shadow worktree + sandbox) — *v0.3*       |
 
 ## How it works
@@ -145,9 +145,9 @@ your normal yazi config is untouched.
 
 - **v0.1 (MVP):** in-place agent on hovered folder, glyphs + badges, agent panel,
   `N`/`a`/`s`/`K`/`r`, hook-driven status.
-- **v0.2 (done):** real-time badge updates via DDS push; nested-tmux attach via `switch-client`.
-- **v0.2.x (next):** `Tab` agent-axis focus, `g a` Agents Overview, "needs you" bell + header
-  counter, live preview-panel refresh.
+- **v0.2 (done):** real-time badge updates via DDS push; nested-tmux attach via `switch-client`;
+  "needs you" bell + header counter; live preview-panel refresh; `g a` Agents Overview.
+- **v0.2.x (next):** polish — themeable colors, config options, `Tab` agent-axis focus.
 - **v0.3:** isolated mode (shadow worktrees), multiple agents per folder, `--sandbox`,
   conflict hints.
 - **v0.4:** packaging, themeable colors, desktop notifications, docs.
