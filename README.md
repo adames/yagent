@@ -5,7 +5,7 @@ control panel for [Devin CLI](https://docs.devin.ai/) local agents: browse your 
 always, but now any folder can have live agents *attached* to it — and you can see at a glance
 which are working, which are done, and which need you.
 
-> Status: early development (v0.1 / MVP in progress).
+> Status: v0.2.x — feature-complete, in polish. Real-time updates, stale-lock cleanup, and `ya pkg` install supported.
 
 ## Why
 
@@ -217,6 +217,17 @@ run = "devin-agent"
 ├── install.sh                   # install hooks + scripts globally
 └── README.md
 ```
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+|---------|-------------|-----|
+| "Scripts not found" toast | Plugin installed via `ya pkg` but `install.sh` not run | Run `./install.sh` to set up hooks and global scripts |
+| "yagent needs tmux" | tmux not on PATH | `brew install tmux` (or your package manager) |
+| "yagent needs devin" | Devin CLI not on PATH | Follow [docs.devin.ai](https://docs.devin.ai/) to install |
+| Agent badge stays after process died | Stale lock wasn't pruned yet | Press `r` (refresh) — it auto-prunes dead sessions |
+| No live badge updates | `YAGENT_YAZI_ID` not propagated | Make sure you launch agents through yagent (not a separate terminal) |
+| Hooks not firing | Another tool already owns `hooks` in Devin config | Merge `hooks.json` manually into `~/.config/devin/config.json` |
 
 ## Roadmap
 

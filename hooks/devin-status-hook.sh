@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# devin-status-hook.sh — Devin CLI lifecycle hook dispatcher for yagent.
+# devin-status-hook.sh — bridge between Devin CLI and yagent.
 #
-# Invoked by Devin for each lifecycle event (see hooks.json). It reads the hook
-# payload on stdin, derives a yagent state for the agent's working directory,
-# and writes it atomically to the folder's state file.
+# Devin calls this script for every lifecycle event (see hooks.json).
+# We read the event payload, figure out what the agent is doing, and
+# write that state to a small JSON file so yazi can display it.
 #
 # Invocation: devin-status-hook.sh <event>
-#   where <event> is one of:
-#     session-start | prompt | pre-tool | post-tool | stop | session-end
+#   Events: session-start | prompt | pre-tool | post-tool | stop | session-end
 #
-# State written (JSON): { state, action, title, session_id, ts }
-#   state: working | needs-you | idle | done | error
+# What we write (JSON):
+#   { state, action, title, workdir, ts }
+#   state is one of: working | needs-you | idle | done | error
 
 set -euo pipefail
 
@@ -77,5 +77,5 @@ if [ -f "$WORKDIR/.yagent/owner.json" ] && [ -n "${YAGENT_YAZI_ID:-}" ] && comma
   ya pub-to "$YAGENT_YAZI_ID" yagent-update --str "$BODY" >/dev/null 2>&1 || true
 fi
 
-# Hooks must not block the agent; always succeed.
+# Never let a hook failure slow down the agent.
 exit 0

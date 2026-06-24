@@ -1,20 +1,22 @@
 --- @since 26.5.6
 --- devin-agent.yazi — make yazi agent-aware.
 ---
---- One module wired up in three roles:
----   * fetcher    -> refreshes the agent state map for the current directory
----   * Linemode   -> renders a colored status glyph on folders that have agents
----   * previewer  -> renders the agent panel for the hovered folder
----   * functional -> action handlers (new / attach / send / kill / refresh)
+--- This plugin turns yazi into a control panel for Devin CLI agents.
+--- It wears four hats:
+---   * fetcher    -> loads the agent state map as you browse directories
+---   * Linemode   -> draws a colored status glyph next to folders that have agents
+---   * previewer  -> shows an agent detail panel when you hover a folder
+---   * functional -> handles keybindings: new, attach, send, kill, clear, refresh
 ---
---- Heavy logic lives in the (tested) shell scripts under $YAGENT_SCRIPTS:
----   agents.sh  -> read agent status      (list | get)
----   agent.sh   -> manage an agent        (start | attach | send | kill)
+--- The heavy lifting is done by shell scripts in the plugin's scripts/ directory:
+---   agents.sh  -> list agents, check if one is running, clean up stale locks
+---   agent.sh   -> start, attach, send commands to, or kill an agent
 
 local M = {}
 
--- ── state colors / glyphs ──────────────────────────────────────────────────
--- "needs-you" is the hero state: bold green, the only one that demands action.
+-- ── how each state looks ────────────────────────────────────────────────────
+-- needs-you is the "hero" state: bold green, because it's the only one that
+-- demands your immediate attention.
 local STYLES = {
 	["working"]   = ui.Style():fg("cyan"),
 	["needs-you"] = ui.Style():fg("green"):bold(),
@@ -34,16 +36,18 @@ local GLYPHS = {
 
 -- ── helpers ────────────────────────────────────────────────────────────────
 
--- Find the directory containing yagent shell scripts.
--- Order: explicit env var -> plugin-relative -> global install.
+-- Figure out where the yagent shell scripts live.  We try three places:
+--   1. $YAGENT_SCRIPTS (set by the yagent launcher)
+--   2. Next to this Lua file (when installed via ya pkg)
+--   3. ~/.local/share/yagent/scripts (global install from install.sh)
 local function scripts_dir()
 	local explicit = os.getenv("YAGENT_SCRIPTS")
 	if explicit then
 		return explicit
 	end
 
-	-- Try to derive the plugin directory from this file's source path.
-	-- yazi loads plugins from ~/.config/yazi/plugins/<name>.yazi/main.lua
+	-- When installed via `ya pkg`, the scripts/ folder sits right next to main.lua.
+	-- We can sniff our own source path to find it.
 	local info = debug.getinfo(1, "S")
 	if info and info.source then
 		local src = info.source
@@ -61,7 +65,7 @@ local function scripts_dir()
 		end
 	end
 
-	-- Global install location (set up by install.sh).
+	-- Fallback: the global install path used by install.sh.
 	local home = os.getenv("HOME") or ""
 	local global = home .. "/.local/share/yagent/scripts"
 	local probe = Command("bash"):arg("-c"):arg("test -f '" .. global .. "/agents.sh' && echo ok")
@@ -73,8 +77,8 @@ local function scripts_dir()
 	return nil
 end
 
--- Run a yagent shell script and return its stdout (or "" on failure).
--- Notifies the user if the script directory cannot be found.
+-- Run a shell script from the yagent scripts directory.
+-- Returns stdout as a string, or "" if something went wrong.
 local function run(script, args)
 	local dir = scripts_dir()
 	if not dir then
@@ -88,7 +92,7 @@ local function run(script, args)
 	return out and out.stdout or ""
 end
 
--- Parse one TSV row from agents.sh -> { dir, state, action, running, title }.
+-- Parse a single tab-separated line from agents.sh into a friendly table.
 local function parse_row(line)
 	local f = {}
 	for field in (line .. "\t"):gmatch("(.-)\t") do
@@ -101,17 +105,20 @@ local function parse_row(line)
 end
 
 -- ── shared state (sync context) ─────────────────────────────────────────────
+-- yazi's sync context is where UI updates happen.  We stash the agent map there
+-- so Linemode, Header, and preview can all read from the same truth.
+
 local set_agents = ya.sync(function(st, agents)
 	st.agents = agents
 	ui.render()
 end)
 
--- read state from inside the sync Linemode closure
+-- Peek at the agent map from inside a sync UI callback (e.g. Linemode).
 local st_agents = ya.sync(function(st)
 	return st.agents
 end)
 
--- Count how many agents currently need the user.
+-- How many agents are waiting for the user right now?
 local function count_needs(agents)
 	local n = 0
 	for _, a in pairs(agents or {}) do
@@ -122,9 +129,9 @@ local function count_needs(agents)
 	return n
 end
 
--- Merge a single live update (from a DDS push) into the agent map. Re-renders
--- the badge, refreshes the preview if this folder is hovered, and "summons" the
--- user (toast + bell) when an agent first transitions into needs-you.
+-- Apply a live state update pushed by a Devin hook over DDS.
+-- This re-colors the badge, refreshes the preview panel if we're hovering
+-- this folder, and rings the bell when an agent first says "needs-you".
 local apply_update = ya.sync(function(st, row)
 	st.agents = st.agents or {}
 	local prev = st.agents[row.dir]
@@ -132,26 +139,27 @@ local apply_update = ya.sync(function(st, row)
 	st.agents[row.dir] = row
 	ui.render()
 
-	-- Live preview refresh: re-peek if we're hovering this folder right now.
+	-- If this folder is currently hovered, force the preview panel to redraw.
 	local h = cx.active.current.hovered
 	if h and tostring(h.url) == row.dir then
 		ya.emit("peek", { cx.active.preview.skip, only_if = h.url, force = true })
 	end
 
-	-- Summon on a fresh needs-you.
+	-- Summon: toast + bell when an agent first transitions to "needs-you".
 	if row.state == "needs-you" and not was_needs then
 		local what = (row.title ~= nil and row.title ~= "") and row.title or row.dir
 		ya.notify({ title = "yagent — needs you", content = what, timeout = 5 })
-		-- Best-effort audible bell; orphan = fire-and-forget, no screen takeover.
+		-- Orphan shell = fire-and-forget, won't steal the screen.
 		ya.emit("shell", { "printf '\\a' > /dev/tty 2>/dev/null", orphan = true })
 	end
 end)
 
+-- Are we already inside a tmux session?
 local function in_tmux()
 	return os.getenv("TMUX") ~= nil and os.getenv("TMUX") ~= ""
 end
 
--- ── fetcher: refresh the agent map for the directory being loaded ───────────
+-- ── fetcher: load agent states when yazi opens a directory ──────────────────
 function M:fetch(job)
 	local agents = {}
 	for line in run("agents.sh", { "list" }):gmatch("[^\r\n]+") do
@@ -164,11 +172,12 @@ function M:fetch(job)
 	return false
 end
 
--- ── setup (sync): register the per-row status glyph ─────────────────────────
+-- ── setup (sync): wire up the UI pieces ────────────────────────────────────
 function M:setup(opts)
 	opts = opts or {}
 	local order = opts.order or 1500
 
+	-- Draw a small colored glyph next to any folder that has an agent attached.
 	Linemode:children_add(function(self)
 		local file = self._file
 		if not file.cha.is_dir or not file.in_current then
@@ -183,14 +192,14 @@ function M:setup(opts)
 		return ui.Line({ " ", ui.Span(glyph):style(style) })
 	end, order)
 
-	-- Live updates: Devin hooks push the new state here via `ya pub-to`, so the
-	-- badge re-colors instantly. The body carries everything we need, keeping
-	-- this sync callback cheap (no shelling out).
+	-- Subscribe to live pushes from Devin hooks (via DDS).
+	-- When an agent's state changes, the hook calls `ya pub-to` and we get the
+	-- new state here instantly — no need to reload the directory or press `r`.
 	ps.sub_remote("yagent-update", function(body)
 		if type(body) ~= "string" then
 			return
 		end
-		-- Body is tab-separated: workdir \t state \t action \t title
+		-- Format: workdir \t state \t action \t title
 		local f = {}
 		for field in (body .. "\t"):gmatch("(.-)\t") do
 			f[#f + 1] = field
@@ -203,13 +212,13 @@ function M:setup(opts)
 			state = f[2],
 			action = f[3],
 			title = f[4] or "",
-			-- A hook only fires while the process is alive; "done" means it ended.
+			-- "done" means the session ended, so the process is no longer running.
 			running = (f[2] == "done") and "no" or "yes",
 		})
 	end)
 
-	-- Header counter: an always-visible "N needs you" chip on the right of the
-	-- top bar, so the summon is felt even when you're deep in another folder.
+	-- Always-visible "N needs you" chip in the top-right corner.
+	-- Even when you're deep in another folder, you'll know an agent is waiting.
 	Header:children_add(function()
 		local n = count_needs(st_agents())
 		if n == 0 then
@@ -219,7 +228,7 @@ function M:setup(opts)
 	end, 9000, Header.RIGHT)
 end
 
--- ── previewer: the agent panel (or a plain dir listing as fallback) ─────────
+-- ── previewer: show agent details (or a plain directory listing) ────────────
 function M:peek(job)
 	local dir = tostring(job.file.url)
 	local row = parse_row((run("agents.sh", { "get", dir }):gsub("[\r\n]+$", "")))
@@ -295,7 +304,7 @@ local function need_scripts()
 	if not dir then
 		ya.notify({
 			title = "yagent",
-			content = "Scripts not found. Install via `./install.sh` or launch via `yagent`.",
+			content = "Can't find yagent scripts. Run ./install.sh or launch with the yagent command.",
 			level = "error",
 			timeout = 6,
 		})
@@ -382,11 +391,11 @@ function M:entry(job)
 		end
 		local row = parse_row((run("agents.sh", { "get", dir }):gsub("[\r\n]+$", "")))
 		if not row or (row.state ~= "done" and row.state ~= "dead" and row.state ~= "error") then
-			return ya.notify({ title = "yagent", content = "Only done / dead / error agents can be cleared.", timeout = 3 })
+			return ya.notify({ title = "yagent", content = "You can only clear finished agents (done, dead, or error).", timeout = 3 })
 		end
 		local yes = ya.confirm({
-			title = "Clear agent?",
-			content = "Remove the finished agent on:\n" .. dir,
+			title = "Clear this agent?",
+			content = "This removes the finished agent from:\n" .. dir,
 			pos = { "center", w = 60, h = 10 },
 		})
 		if yes then

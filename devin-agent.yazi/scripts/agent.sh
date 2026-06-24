@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-# agent.sh — manage a Devin local agent attached to a folder, via tmux.
+# agent.sh — start, attach to, and manage Devin agents running inside tmux.
 #
-# One tmux session per agent, named "yagent-<slug>" where <slug> derives from
-# the folder path. The agent runs `devin` inside the folder. A lock file at
-# <folder>/.yagent/owner.json records the tmux session + task title.
+# Each agent gets its own tmux session named "yagent-<slug>".
+# The agent runs `devin` in the target folder. A small lock file at
+# <folder>/.yagent/owner.json remembers the session name and task.
 #
 # Usage:
-#   agent.sh start  <dir> [task...]   create session + launch devin (with task)
-#   agent.sh attach <dir>             attach to the agent's REPL (foreground)
-#   agent.sh send   <dir> <text...>   send a line to the running REPL
-#   agent.sh kill   <dir>             kill the session + clear the lock
-#   agent.sh status <dir>             print running|stopped
+#   agent.sh start  <dir> [task...]   spin up a new agent
+#   agent.sh attach <dir>             jump into the agent's REPL
+#   agent.sh switch <dir>             switch tmux client to the agent (when yazi is in tmux)
+#   agent.sh send   <dir> <text...>   type a line into the agent's REPL
+#   agent.sh kill   <dir>             stop the agent and remove the lock
+#   agent.sh status <dir>             say "running" or "stopped"
 #   agent.sh slug   <dir>             print the tmux session name
 
 set -euo pipefail
@@ -25,11 +26,11 @@ slug_for() {
 has_session() { tmux has-session -t "$1" 2>/dev/null; }
 
 require_tmux() {
-  command -v tmux >/dev/null || { echo "yagent: tmux is required" >&2; exit 1; }
+  command -v tmux >/dev/null || { echo "yagent needs tmux to run agents. Please install it first." >&2; exit 1; }
 }
 
 require_devin() {
-  command -v devin >/dev/null || { echo "yagent: devin is required" >&2; exit 1; }
+  command -v devin >/dev/null || { echo "yagent needs the Devin CLI. See https://docs.devin.ai/ to install it." >&2; exit 1; }
 }
 
 write_lock() {
@@ -86,16 +87,16 @@ case "$cmd" in
   attach)
     require_tmux
     dir="${1:?dir required}"; s="$(slug_for "$dir")"
-    if ! has_session "$s"; then echo "yagent: no agent for $dir" >&2; exit 1; fi
+    if ! has_session "$s"; then echo "No agent running on $dir. Press N to start one." >&2; exit 1; fi
     tmux attach-session -t "$s"
     ;;
 
   switch)
-    # Used when yazi itself runs inside tmux: attaching would nest, so switch
-    # the current client to the agent's session instead.
+    # When yazi itself is inside tmux, attaching would nest sessions.
+    # Instead we switch the tmux client to the agent's session.
     require_tmux
     dir="${1:?dir required}"; s="$(slug_for "$dir")"
-    if ! has_session "$s"; then echo "yagent: no agent for $dir" >&2; exit 1; fi
+    if ! has_session "$s"; then echo "No agent running on $dir. Press N to start one." >&2; exit 1; fi
     tmux switch-client -t "$s"
     ;;
 
@@ -103,7 +104,7 @@ case "$cmd" in
     require_tmux
     dir="${1:?dir required}"; shift || true
     s="$(slug_for "$dir")"
-    if ! has_session "$s"; then echo "yagent: no agent for $dir" >&2; exit 1; fi
+    if ! has_session "$s"; then echo "No agent running on $dir. Press N to start one." >&2; exit 1; fi
     tmux send-keys -t "$s" "$*" Enter
     ;;
 

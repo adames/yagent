@@ -1,42 +1,48 @@
 #!/usr/bin/env bash
-# agents.sh — query yagent agent status (read-only).
+# agents.sh — read the current state of every yagent-managed agent.
 #
-# Combines three sources into one effective state per folder:
-#   1. tmux liveness  -> is the agent process actually running?
-#   2. state file      -> what is it doing? (written by Devin lifecycle hooks)
-#   3. lock file       -> task title
+# We combine three sources to figure out what's really going on:
+#   1. Is the tmux session still alive?  (The ground truth for "running".)
+#   2. The state file written by Devin hooks.  (What the agent is doing.)
+#   3. The lock file.  (The task title you gave it.)
 #
-# Effective state (what the UI color-codes on):
+# What we report:
 #   working | needs-you | idle | done | error | dead
-#     - if tmux is alive: use the hook state (working/needs-you/idle/error)
-#     - if tmux is dead:  "done" when the hook said done/needs-you,
-#                         otherwise "dead" (crashed/abandoned)
+#
+#   - If tmux is alive -> trust the hook state.
+#   - If tmux is dead  -> "done" if the hook said done or needs-you,
+#                         "dead" otherwise (crashed or abandoned).
 #
 # Usage:
-#   agents.sh list            TSV of all known agents: dir \t state \t action \t running \t title
-#   agents.sh get <dir>       same single row for one folder (empty if none)
+#   agents.sh list              list every known agent (tab-separated)
+#   agents.sh get <dir>         single agent for one folder (empty if none)
+#   agents.sh prune             clean up stale locks and ghost state files
 
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STATE_ROOT="${YAGENT_STATE_ROOT:-${XDG_STATE_HOME:-$HOME/.local/state}/yagent}"
 
+# Turn a folder path into a short tmux session name.
 slug_for() { printf 'yagent-%s' "$(printf '%s' "$1" | shasum -a 256 | cut -c1-12)"; }
+
+# Is the tmux session for this folder still alive?
 running_for() { tmux has-session -t "$(slug_for "$1")" 2>/dev/null && echo yes || echo no; }
 
-# Extract a top-level JSON string/number field (no jq dependency).
+# Pull a top-level JSON field out without needing jq.
 jget() { sed -n "s/.*\"$2\"[[:space:]]*:[[:space:]]*\"\{0,1\}\([^\",}]*\)\"\{0,1\}.*/\1/p" <<<"$1" | head -n1; }
 
+# Print one tab-separated row for a given state file.
 emit_row() {
-  # $1 = state file path (must exist)
   local sf="$1" json dir state action title running eff
   json="$(tr -d '\n' < "$sf")"
   dir="$(jget "$json" workdir)"
   [ -z "$dir" ] && return 0
-  # Only surface yagent-managed agents: those started via agent.sh, which
-  # writes a lock. Global Devin hooks also fire for non-yagent sessions
-  # (e.g. ad-hoc `devin` runs); those have no lock and are ignored here.
+
+  # We only care about agents started through yagent (agent.sh writes a lock).
+  # Ad-hoc `devin` runs also fire hooks, but they have no lock — ignore them.
   [ -f "$dir/.yagent/owner.json" ] || return 0
+
   state="$(jget "$json" state)"
   action="$(jget "$json" action)"
   title="$(jget "$json" title)"
@@ -54,8 +60,9 @@ emit_row() {
   printf '%s\t%s\t%s\t%s\t%s\n' "$dir" "$eff" "${action:-}" "$running" "${title:-}"
 }
 
+# Clean up one stale agent: if the tmux session is gone but the lock and/or
+# state file still exist, remove them so the UI doesn't show a ghost agent.
 prune_one() {
-  # $1 = state file path
   local sf="$1" json dir state running
   json="$(tr -d '\n' < "$sf")"
   dir="$(jget "$json" workdir)"
@@ -64,9 +71,6 @@ prune_one() {
   running="$(running_for "$dir")"
   [ "$running" = "yes" ] && return 0
 
-  # Session is dead but lock exists -> stale.  Also remove the state file
-  # if the agent ended in a terminal state (done/dead) so it disappears
-  # from the UI instead of lingering as a ghost.
   state="$(jget "$json" state)"
   case "$state" in
     done|dead|error|needs-you)
@@ -77,6 +81,7 @@ prune_one() {
   esac
 }
 
+# Walk every state file and prune the stale ones.
 prune_all() {
   [ -d "$STATE_ROOT" ] || return 0
   local sf
@@ -86,6 +91,7 @@ prune_all() {
   done
 }
 
+# List every agent we know about.
 list_all() {
   [ -d "$STATE_ROOT" ] || return 0
   local sf
