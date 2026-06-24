@@ -74,6 +74,17 @@ local st_agents = ya.sync(function(st)
 	return st.agents
 end)
 
+-- Merge a single live update (from a DDS push) into the agent map + re-render.
+local apply_update = ya.sync(function(st, row)
+	st.agents = st.agents or {}
+	st.agents[row.dir] = row
+	ui.render()
+end)
+
+local function in_tmux()
+	return os.getenv("TMUX") ~= nil and os.getenv("TMUX") ~= ""
+end
+
 -- ── fetcher: refresh the agent map for the directory being loaded ───────────
 function M:fetch(job)
 	local agents = {}
@@ -105,6 +116,31 @@ function M:setup(opts)
 		local style = STYLES[agent.state] or ui.Style()
 		return ui.Line({ " ", ui.Span(glyph):style(style) })
 	end, order)
+
+	-- Live updates: Devin hooks push the new state here via `ya pub-to`, so the
+	-- badge re-colors instantly. The body carries everything we need, keeping
+	-- this sync callback cheap (no shelling out).
+	ps.sub_remote("yagent-update", function(body)
+		if type(body) ~= "string" then
+			return
+		end
+		-- Body is tab-separated: workdir \t state \t action \t title
+		local f = {}
+		for field in (body .. "\t"):gmatch("(.-)\t") do
+			f[#f + 1] = field
+		end
+		if not f[1] or f[1] == "" then
+			return
+		end
+		apply_update({
+			dir = f[1],
+			state = f[2],
+			action = f[3],
+			title = f[4] or "",
+			-- A hook only fires while the process is alive; "done" means it ended.
+			running = (f[2] == "done") and "no" or "yes",
+		})
+	end)
 end
 
 -- ── previewer: the agent panel (or a plain dir listing as fallback) ─────────
@@ -204,13 +240,20 @@ function M:entry(job)
 		if ev ~= 1 or not value or value == "" then
 			return
 		end
-		local agent = scripts_dir() .. "/agent.sh"
-		local cmd = string.format(
-			"bash %s start %s %s && bash %s attach %s",
-			ya.quote(agent), ya.quote(dir), ya.quote(value), ya.quote(agent), ya.quote(dir)
-		)
-		ya.emit("shell", { cmd, block = true })
-		self:refresh()
+		if in_tmux() then
+			-- yazi runs inside tmux: start detached, then switch the client to
+			-- the agent session (attaching would nest and be refused).
+			run("agent.sh", { "start", dir, value })
+			run("agent.sh", { "switch", dir })
+		else
+			local agent = scripts_dir() .. "/agent.sh"
+			local cmd = string.format(
+				"bash %s start %s %s && bash %s attach %s",
+				ya.quote(agent), ya.quote(dir), ya.quote(value), ya.quote(agent), ya.quote(dir)
+			)
+			ya.emit("shell", { cmd, block = true })
+			self:refresh()
+		end
 
 	elseif action == "attach" then
 		if not dir then
@@ -220,8 +263,12 @@ function M:entry(job)
 		if not row or row.running ~= "yes" then
 			return ya.notify({ title = "yagent", content = "No running agent on this folder.", timeout = 3 })
 		end
-		ya.emit("shell", { string.format("bash %s attach %s", ya.quote(scripts_dir() .. "/agent.sh"), ya.quote(dir)), block = true })
-		self:refresh()
+		if in_tmux() then
+			run("agent.sh", { "switch", dir })
+		else
+			ya.emit("shell", { string.format("bash %s attach %s", ya.quote(scripts_dir() .. "/agent.sh"), ya.quote(dir)), block = true })
+			self:refresh()
+		end
 
 	elseif action == "send" then
 		if not dir then

@@ -68,5 +68,14 @@ cat > "$TMP" <<EOF
 EOF
 mv -f "$TMP" "$STATE_FILE"
 
+# Live update (DDS): if this is a yagent-managed agent (has a lock) and we know
+# the yazi client id, push the new state so the UI re-colors instantly without
+# waiting for a directory reload or manual refresh. Body is tab-separated:
+#   workdir \t state \t action \t title
+if [ -f "$WORKDIR/.yagent/owner.json" ] && [ -n "${YAGENT_YAZI_ID:-}" ] && command -v ya >/dev/null 2>&1; then
+  printf -v BODY '%s\t%s\t%s\t%s' "$WORKDIR" "$STATE" "$ACTION" "$TITLE"
+  ya pub-to "$YAGENT_YAZI_ID" yagent-update --str "$BODY" >/dev/null 2>&1 || true
+fi
+
 # Hooks must not block the agent; always succeed.
 exit 0

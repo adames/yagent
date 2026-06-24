@@ -85,6 +85,17 @@ yazi plugin reads: state file + lock + `tmux has-session` + `git -C` info
   attached to the original folder.
 - **Backend:** one tmux session per agent; attach = drop into its REPL.
 - **Status:** Devin lifecycle hooks report state; tmux liveness is the authority for "running".
+- **Live updates:** `yagent` launches yazi with a unique `--client-id` and exports it to the
+  agents it spawns. Each lifecycle hook pushes the new state back over yazi's DDS
+  (`ya pub-to`), so badges re-color **instantly** — no polling, no manual refresh. (`r` is
+  still there as a fallback.)
+
+### Attaching, inside or outside tmux
+
+- **Outside tmux:** `a` (or `N`) suspends yazi and drops you into the agent's REPL; detach
+  (`Ctrl-b d`) to return.
+- **Inside tmux:** attaching would nest, so yagent instead `switch-client`s your tmux to the
+  agent's session. Return to yazi with `Ctrl-b L` (last session) or `Ctrl-b s` (session list).
 
 ## Requirements
 
@@ -132,9 +143,11 @@ your normal yazi config is untouched.
 
 ## Roadmap
 
-- **v0.1 (MVP):** in-place agent on hovered folder, glyphs + badges, agent panel, attach/kill,
-  hook-driven status, "needs you" bell.
-- **v0.2:** `Tab` agent-axis focus, `g a` Agents Overview, `s` send prompt.
+- **v0.1 (MVP):** in-place agent on hovered folder, glyphs + badges, agent panel,
+  `N`/`a`/`s`/`K`/`r`, hook-driven status.
+- **v0.2 (done):** real-time badge updates via DDS push; nested-tmux attach via `switch-client`.
+- **v0.2.x (next):** `Tab` agent-axis focus, `g a` Agents Overview, "needs you" bell + header
+  counter, live preview-panel refresh.
 - **v0.3:** isolated mode (shadow worktrees), multiple agents per folder, `--sandbox`,
   conflict hints.
 - **v0.4:** packaging, themeable colors, desktop notifications, docs.

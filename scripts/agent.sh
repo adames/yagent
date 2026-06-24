@@ -63,12 +63,16 @@ case "$cmd" in
       exit 0
     fi
     write_lock "$dir" "$s" "$task"
+    # Propagate the yazi client id into the agent's environment so the Devin
+    # lifecycle hooks can push live updates back to this yazi instance (DDS).
+    envp=""
+    [ -n "${YAGENT_YAZI_ID:-}" ] && envp="env YAGENT_YAZI_ID=$(printf '%q' "$YAGENT_YAZI_ID") "
     # Build the devin command. With a task, start the REPL seeded with it.
     if [ -n "$task" ]; then
       # shellcheck disable=SC2089
-      dcmd="devin -- $(printf '%q ' "$task")"
+      dcmd="${envp}devin -- $(printf '%q ' "$task")"
     else
-      dcmd="devin"
+      dcmd="${envp}devin"
     fi
     tmux new-session -d -s "$s" -c "$dir" "$dcmd"
     echo "$s"
@@ -79,6 +83,15 @@ case "$cmd" in
     dir="${1:?dir required}"; s="$(slug_for "$dir")"
     if ! has_session "$s"; then echo "yagent: no agent for $dir" >&2; exit 1; fi
     tmux attach-session -t "$s"
+    ;;
+
+  switch)
+    # Used when yazi itself runs inside tmux: attaching would nest, so switch
+    # the current client to the agent's session instead.
+    require_tmux
+    dir="${1:?dir required}"; s="$(slug_for "$dir")"
+    if ! has_session "$s"; then echo "yagent: no agent for $dir" >&2; exit 1; fi
+    tmux switch-client -t "$s"
     ;;
 
   send)
@@ -98,7 +111,7 @@ case "$cmd" in
     ;;
 
   *)
-    echo "usage: agent.sh {start|attach|send|kill|status|slug} <dir> [args]" >&2
+    echo "usage: agent.sh {start|attach|switch|send|kill|status|slug} <dir> [args]" >&2
     exit 2
     ;;
 esac

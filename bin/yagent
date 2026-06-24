@@ -19,6 +19,10 @@ command -v tmux  >/dev/null || echo "yagent: warning: 'tmux' not found on PATH" 
 export YAGENT_SCRIPTS="$REPO/scripts"
 export YAGENT_HOME="$REPO"
 
+# A stable, unique id for this yazi instance so Devin hooks running inside the
+# agents we launch can push live status updates back to us over DDS (ya pub-to).
+export YAGENT_YAZI_ID="${YAGENT_YAZI_ID:-$(date +%s)$RANDOM}"
+
 # Build (idempotently) an isolated yazi config home.
 CONFIG_HOME="${XDG_STATE_HOME:-$HOME/.local/state}/yagent/yazi-config"
 mkdir -p "$CONFIG_HOME/plugins"
@@ -28,4 +32,4 @@ ln -sfn "$REPO/config/init.lua"    "$CONFIG_HOME/init.lua"
 ln -sfn "$REPO/plugins/devin-agent.yazi" "$CONFIG_HOME/plugins/devin-agent.yazi"
 
 ROOT="${1:-$PWD}"
-exec env YAZI_CONFIG_HOME="$CONFIG_HOME" yazi "$ROOT"
+exec env YAZI_CONFIG_HOME="$CONFIG_HOME" yazi --client-id "$YAGENT_YAZI_ID" "$ROOT"
