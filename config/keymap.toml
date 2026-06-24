@@ -1,6 +1,6 @@
 # yagent keymap — agent actions layered onto yazi's manager.
-# Merged into your ~/.config/yazi/keymap.toml by install.sh (prepend_keymap so
-# these take priority without clobbering your existing bindings).
+# Loaded by the isolated profile that `bin/yagent` launches. prepend_keymap so
+# these take priority without clobbering yazi's defaults.
 
 [[mgr.prepend_keymap]]
 on  = "N"
@@ -10,7 +10,7 @@ desc = "yagent: new agent on the hovered folder"
 [[mgr.prepend_keymap]]
 on  = "a"
 run = "plugin devin-agent -- attach"
-desc = "yagent: attach to the selected agent"
+desc = "yagent: attach to the agent on the hovered folder"
 
 [[mgr.prepend_keymap]]
 on  = "s"
@@ -23,16 +23,6 @@ run = "plugin devin-agent -- kill"
 desc = "yagent: kill the agent (confirm)"
 
 [[mgr.prepend_keymap]]
-on  = "<Tab>"
-run = "plugin devin-agent -- focus"
-desc = "yagent: enter/leave the agent axis"
-
-[[mgr.prepend_keymap]]
-on  = ["g", "a"]
-run = "plugin devin-agent -- overview"
-desc = "yagent: agents overview (sorted by needs-you)"
-
-[[mgr.prepend_keymap]]
-on  = "I"
-run = "plugin devin-agent -- new-isolated"
-desc = "yagent: new isolated agent (worktree + sandbox) [v0.3]"
+on  = "r"
+run = "plugin devin-agent -- refresh"
+desc = "yagent: refresh agent state"

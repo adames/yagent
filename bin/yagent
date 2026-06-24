@@ -1,18 +1,31 @@
 #!/usr/bin/env bash
 # yagent — launch yazi as an agent-aware file manager.
 #
-# Opens yazi rooted at the given directory (default: cwd). Uses your normal yazi
-# config if yagent has been installed (./install.sh), which symlinks the plugin
-# and merges the keymap.
+# Assembles an isolated YAZI_CONFIG_HOME (so your normal yazi config is never
+# touched), wiring in the yagent plugin + config, then opens yazi rooted at the
+# given directory (default: cwd).
 #
-# Usage:
-#   yagent [dir]
+# Usage:  yagent [dir]
 
 set -euo pipefail
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 command -v yazi >/dev/null || { echo "yagent: yazi is not installed" >&2; exit 1; }
 command -v devin >/dev/null || echo "yagent: warning: 'devin' not found on PATH" >&2
 command -v tmux  >/dev/null || echo "yagent: warning: 'tmux' not found on PATH" >&2
 
+# Where the plugin finds its shell helpers.
+export YAGENT_SCRIPTS="$REPO/scripts"
+export YAGENT_HOME="$REPO"
+
+# Build (idempotently) an isolated yazi config home.
+CONFIG_HOME="${XDG_STATE_HOME:-$HOME/.local/state}/yagent/yazi-config"
+mkdir -p "$CONFIG_HOME/plugins"
+ln -sfn "$REPO/config/yazi.toml"   "$CONFIG_HOME/yazi.toml"
+ln -sfn "$REPO/config/keymap.toml" "$CONFIG_HOME/keymap.toml"
+ln -sfn "$REPO/config/init.lua"    "$CONFIG_HOME/init.lua"
+ln -sfn "$REPO/plugins/devin-agent.yazi" "$CONFIG_HOME/plugins/devin-agent.yazi"
+
 ROOT="${1:-$PWD}"
-exec yazi "$ROOT"
+exec env YAZI_CONFIG_HOME="$CONFIG_HOME" yazi "$ROOT"

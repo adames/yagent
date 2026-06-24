@@ -58,13 +58,14 @@ priority in the Agents Overview.
 | Key   | Action                                                            |
 |-------|-------------------------------------------------------------------|
 | `N`   | New agent on hovered folder -> task prompt -> launch + attach     |
-| `Tab` | Enter / leave the agent axis for the hovered folder               |
-| `a`   | Attach to selected agent (resume its REPL)                        |
+| `a`   | Attach to the agent on the hovered folder (resume its REPL)       |
 | `s`   | Send a one-off prompt to a running agent                          |
 | `K`   | Kill agent (confirm)                                              |
-| `g a` | Agents Overview (repo-wide, sorted by "needs you")                |
-| `I`   | New **isolated** agent (shadow git worktree + sandbox) — v0.3     |
+| `r`   | Refresh agent state                                               |
 | `Enter` | Open folder (unchanged)                                         |
+| `Tab` | Enter / leave the agent axis — *v0.2*                             |
+| `g a` | Agents Overview (sorted by "needs you") — *v0.2*                  |
+| `I`   | New **isolated** agent (shadow worktree + sandbox) — *v0.3*       |
 
 ## How it works
 
@@ -95,29 +96,36 @@ yazi plugin reads: state file + lock + `tmux has-session` + `git -C` info
 ## Install
 
 ```sh
-./install.sh
+./install.sh                      # installs Devin lifecycle hooks (with backup)
+export PATH="$PWD/bin:$PATH"       # put the launcher on your PATH
+yagent ~/code/your-repo            # open it on a repo
 ```
 
-This symlinks the plugin into `~/.config/yazi/plugins/`, installs the Devin lifecycle hooks
-globally, and provides a `yagent` launcher (`bin/yagent`) that opens yazi with an isolated
-config rooted at a repo.
+`install.sh` installs the Devin lifecycle hooks into your user-level Devin config (backing it
+up first, and never clobbering existing hooks). The yazi side needs no install step: `bin/yagent`
+launches yazi with an **isolated** `YAZI_CONFIG_HOME` that wires in the plugin automatically, so
+your normal yazi config is untouched.
 
 ## Layout
 
 ```
 .
-├── install.sh                   # symlink plugin, install hooks, set up launcher
-├── bin/yagent                   # open yazi (isolated config) rooted at a repo
+├── install.sh                   # install Devin lifecycle hooks (with backup)
+├── bin/yagent                   # launch yazi with an isolated config, rooted at a repo
 ├── hooks/
 │   ├── devin-status-hook.sh     # one dispatcher for all lifecycle events
 │   └── hooks.json
 ├── plugins/devin-agent.yazi/
-│   ├── main.lua                 # glyphs, agent-panel previewer, action handlers
-│   ├── status.lua               # read state+lock+tmux+git; cache
+│   ├── main.lua                 # fetcher + linemode badge + previewer + actions
 │   └── README.md
-├── config/{yazi.toml,keymap.toml,theme.toml}
+├── config/                      # isolated yazi profile launched by bin/yagent
+│   ├── yazi.toml                #   registers the fetcher + previewer
+│   ├── keymap.toml              #   N / a / s / K / r bindings
+│   ├── init.lua                 #   require("devin-agent"):setup()
+│   └── theme.toml               #   color reference (states)
 └── scripts/
-    ├── agent.sh                 # start / attach / send / kill (tmux + devin)
+    ├── agents.sh                # query status: list | get  (read-only)
+    ├── agent.sh                 # manage an agent: start / attach / send / kill (tmux + devin)
     ├── worktree.sh              # isolated-mode shadow worktrees (v0.3)
     └── statedir.sh              # dir -> state-file path helper
 ```
