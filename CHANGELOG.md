@@ -11,6 +11,7 @@
 - **`ya pkg` support.** The plugin is now self-contained at `devin-agent.yazi/` and installable via `ya pkg add adames-cognition/yagent:devin-agent`.
 - **Global script install.** `install.sh` now copies scripts to `~/.local/share/yagent/scripts` so `ya pkg` users don't need the launcher.
 - **Troubleshooting table** in the README.
+- **ASCII walkthrough tutorials** in the README showing the full TUI interaction: spawning agents, the summon loop, managing multiple agents, and tmux workflow.
 
 ### Changed
 

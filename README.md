@@ -6,6 +6,8 @@ always, but now any folder can have live agents *attached* to it — and you can
 which are working, which are done, and which need you.
 
 > Status: v0.2.x — feature-complete, in polish. Real-time updates, stale-lock cleanup, and `ya pkg` install supported.
+>
+> 📹 *Video demo coming soon.* The ASCII walkthroughs below show the full interaction.
 
 ## Why
 
@@ -26,17 +28,30 @@ file-browsing mental model; agents are a second navigable layer over the same tr
   agents attached to the hovered folder.
 - `Enter` always opens the folder (unchanged). Agents are reached via the parallel gesture.
 
-## The signature flow
+## What it looks like
 
 ```
-1. Browsing ~/code/myapp, you hover src/auth/
-2. Realize it needs work -> press N ("new agent here")
-3. Type the task in the prompt overlay
-4. yagent launches devin in that folder (its own tmux session) and drops
-   you into the live REPL. Detach -> back in yazi instantly.
-5. src/auth/ now carries a colored agent badge. Keep browsing.
-6. Badge turns GREEN ("needs you") -> press a to jump back into its REPL.
+┌──────────────────────────────────────────────────────────────────────┐
+│  my-repo  ◆ 2 needs you                                   9.2 MiB  │  ← header counter
+├──────────┬───────────────────────────────┬─────────────────────────┤
+│ .git     │                               │ Agent                   │
+│ src   ◆  │                               │ ─────────────────────── │
+│ test  ○  │  (normal yazi file list)      │  state   ◆ needs-you   │  ← preview panel
+│ docs  ·  │                               │  proc    running        │
+│ ...      │                               │  task    refactor auth  │
+│          │                               │                         │
+│          │                               │  a attach  s send  K kill│
+└──────────┴───────────────────────────────┴─────────────────────────┘
+   ↑                      ↑                           ↑
+   folder list      normal browsing              agent panel
+   with glyphs      (unchanged)                 (when you hover a
+   (◆ ○ ·)                                         folder with an agent)
 ```
+
+Folders with agents get a small colored glyph in the file list:
+- `●` cyan = working | `◆` green = needs you | `○` dim = idle | `✓` gray = done | `·` dim = dead | `✕` red = error
+
+The header counter (`◆ 2 needs you`) is always visible — even when you're deep in another folder.
 
 ## Status model
 
@@ -67,6 +82,156 @@ priority in the Agents Overview.
 | `Enter` | Open folder (unchanged)                                         |
 | `Tab` | Enter / leave the agent axis — *planned*                          |
 | `I`   | New **isolated** agent (shadow worktree + sandbox) — *v0.3*       |
+
+## Tutorials
+
+### Tutorial 1: Spawn, browse, and get summoned back
+
+**Step 1 — You spot a folder that needs work**
+
+```
+┌────────────────────────────────────────────────────┐
+│  my-repo                                             │
+├──────────┬───────────────────────────────┬───────────┤
+│ .git     │                               │           │
+│ src      │  README.md                    │           │
+│ auth  ▶  │  main.rs                      │           │
+│ test     │  lib.rs                       │           │
+│ docs     │  Cargo.toml                   │           │
+└──────────┴───────────────────────────────┴───────────┘
+```
+
+You're hovering `src/auth`. It needs refactoring.
+
+**Step 2 — Press `N` and describe the task**
+
+```
+┌────────────────────────────────────────────────────┐
+│  Task for agent in auth:                           │
+│  ┌──────────────────────────────────────────────┐  │
+│  │ refactor the login flow to use async/await   │  │
+│  └──────────────────────────────────────────────┘  │
+│                    [ Enter ]  [ Cancel ]             │
+└────────────────────────────────────────────────────┘
+```
+
+**Step 3 — The agent launches and you drop into its REPL**
+
+```
+$ devin
+> refactor the login flow to use async/await
+...
+```
+
+Type your message, watch it start. When you're ready to let it work alone, detach: `Ctrl-b d`.
+
+**Step 4 — You're back in yazi. The folder now has a badge.**
+
+```
+┌────────────────────────────────────────────────────┐
+│  my-repo                                             │
+├──────────┬───────────────────────────────┬───────────┤
+│ .git     │                               │ Agent     │
+│ src   ●  │  (you keep browsing)          │ ───────── │
+│ auth  ○  │                               │  state  ○ idle   │
+│ test     │                               │  proc   running  │
+│ docs     │                               │  task   refactor │
+└──────────┴───────────────────────────────┴───────────┘
+```
+
+The badge starts as `○ idle` (spinning up), then turns `● working` as the agent thinks.
+
+**Step 5 — The summon. The badge turns `◆` and the bell rings.**
+
+```
+┌────────────────────────────────────────────────────┐
+│  my-repo  ◆ 1 needs you                            │  ← header counter appears
+├──────────┬───────────────────────────────┬───────────┤
+│ .git     │                               │ Agent     │
+│ src   ●  │                               │ ───────── │
+│ auth  ◆  │  (you're in another folder)   │  state  ◆ needs-you   │
+│ test     │                               │  proc   running       │
+│ docs     │                               │  task   refactor auth │
+└──────────┴───────────────────────────────┴───────────┘
+```
+
+Even though you're looking at a different folder, the header counter tells you someone needs attention.
+
+**Step 6 — Press `a` to jump back into the REPL**
+
+The agent is waiting for your input. You reply, detach again, and keep browsing.
+
+---
+
+### Tutorial 2: Manage many agents at once
+
+You have three agents running across your repo:
+
+```
+┌────────────────────────────────────────────────────┐
+│  my-repo  ◆ 2 needs you                            │
+├──────────┬───────────────────────────────┬───────────┤
+│ .git     │                               │           │
+│ api   ●  │                               │           │
+│ auth  ◆  │                               │           │
+│ db    ✓  │                               │           │
+│ test  ◆  │                               │           │
+└──────────┴───────────────────────────────┴───────────┘
+```
+
+**Press `g a` for the Agents Overview.**
+
+```
+┌────────────────────────────────────────────────────┐
+│  Agents Overview                                     │
+│                                                      │
+│  1  ◆ needs-you   auth     refactor auth             │
+│  2  ◆ needs-you   test     write integration tests   │
+│  3  ● working     api      add rate limiting         │
+│  4  ✓ done        db       migrate users table       │
+│                                                      │
+│  Press a key to reveal that folder...               │
+└──────────────────────────────────────────────────────┘
+```
+
+Agents are sorted by urgency: `needs-you` first, then `working`, `idle`, `error`, `done`.
+
+Press `1` and yazi navigates to `src/auth`. Press `a` to attach.
+
+Later, `db` is done. Hover it and press `c`:
+
+```
+┌────────────────────────────────────────────────────┐
+│  Clear this agent?                                   │
+│                                                      │
+│  This removes the finished agent from:               │
+│  /Users/you/code/my-repo/src/db                      │
+│                                                      │
+│         [ Yes ]  [ No ]                              │
+└──────────────────────────────────────────────────────┘
+```
+
+The `✓` disappears. Your tree stays clean.
+
+---
+
+### Tutorial 3: Working inside tmux
+
+If you run yazi inside tmux (recommended for long-lived agents), attaching would nest sessions. yagent handles this automatically:
+
+- Press `N` or `a` → yagent calls `tmux switch-client` instead of `attach`
+- You're now in the agent's tmux session, talking to Devin directly
+- When you're done, press `Ctrl-b L` to switch back to yazi (last session)
+
+```
+# Your tmux session tree might look like:
+├─ yazi-main     (yagent running here)
+├─ yagent-abc123 (agent on src/auth)
+├─ yagent-def456 (agent on src/api)
+└─ yagent-ghi789 (agent on src/db, done)
+```
+
+`Ctrl-b s` shows all sessions if you ever lose track.
 
 ## How it works
 
