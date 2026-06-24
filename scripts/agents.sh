@@ -33,6 +33,10 @@ emit_row() {
   json="$(tr -d '\n' < "$sf")"
   dir="$(jget "$json" workdir)"
   [ -z "$dir" ] && return 0
+  # Only surface yagent-managed agents: those started via agent.sh, which
+  # writes a lock. Global Devin hooks also fire for non-yagent sessions
+  # (e.g. ad-hoc `devin` runs); those have no lock and are ignored here.
+  [ -f "$dir/.yagent/owner.json" ] || return 0
   state="$(jget "$json" state)"
   action="$(jget "$json" action)"
   title="$(jget "$json" title)"
