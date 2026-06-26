@@ -6,8 +6,26 @@ always, but now any folder can have live agents *attached* to it — and you can
 which are working, which are done, and which need you.
 
 > Status: v0.2.x — feature-complete, in polish. Real-time updates, stale-lock cleanup, and `ya pkg` install supported.
->
-> 📹 *Video demo coming soon.* The ASCII walkthroughs below show the full interaction.
+
+## Screenshots
+
+**Browsing your repo — agents as an ambient layer over the file tree:**
+
+![yagent main view](screenshots/images/yagent-main.png)
+
+*`api` is working (● cyan), `auth` needs you (◆ green), `db` is done (✓ gray). The header always shows how many agents need attention.*
+
+**An agent needs your input — hover it to see what it wants:**
+
+![yagent needs-you state](screenshots/images/yagent-needs-you.png)
+
+*Press `a` to drop into the agent's REPL and reply, then detach and keep browsing.*
+
+**`g a` — Agents Overview, sorted by urgency:**
+
+![yagent overview](screenshots/images/yagent-overview.png)
+
+*All agents ranked by urgency. Press the number key to jump to that folder.*
 
 ## Why
 
