@@ -38,21 +38,19 @@ if command -v python3 >/dev/null && [ -f "$DEVIN_CONFIG" ]; then
 import json, sys
 cfg_path, hooks_path = sys.argv[1], sys.argv[2]
 with open(cfg_path) as f: cfg = json.load(f)
-with open(hooks_path) as f: hooks = json.load(f)
-existing = cfg.get("hooks")
-if existing:
-    print("!!  Devin config already has a 'hooks' key; not modifying it.", file=sys.stderr)
-    print("    Merge these events manually:", ", ".join(hooks), file=sys.stderr)
-    sys.exit(3)
-cfg["hooks"] = hooks
-with open(cfg_path, "w") as f: json.dump(cfg, f, indent=2)
-print("==> Installed yagent hooks into Devin user config.")
+with open(hooks_path) as f: new_hooks = json.load(f)
+existing = cfg.setdefault("hooks", {})
+added = []
+for event, entries in new_hooks.items():
+    if event not in existing:
+        existing[event] = entries
+        added.append(event)
+if added:
+    with open(cfg_path, "w") as f: json.dump(cfg, f, indent=2)
+    print("==> Merged yagent hooks into Devin user config:", ", ".join(added))
+else:
+    print("==> yagent hooks already present in Devin user config — nothing to do.")
 PY
-  rc=$?
-  if [ "$rc" = "3" ]; then
-    cp "$RENDERED" "$(dirname "$DEVIN_CONFIG")/yagent-hooks.json"
-    warn "Wrote $(dirname "$DEVIN_CONFIG")/yagent-hooks.json for manual merge."
-  fi
 else
   mkdir -p "$(dirname "$DEVIN_CONFIG")"
   cp "$RENDERED" "$(dirname "$DEVIN_CONFIG")/yagent-hooks.json"
@@ -68,17 +66,36 @@ cp "$REPO"/scripts/*.sh "$GLOBAL_SCRIPTS/"
 chmod +x "$GLOBAL_SCRIPTS"/*.sh
 info "Installed scripts to $GLOBAL_SCRIPTS."
 
-# 4. PATH + usage ------------------------------------------------------------
+# 4. Shell alias -------------------------------------------------------------
+ALIAS_LINE="alias yagent='$REPO/bin/yagent'"
+
+# Pick the right shell profile to write into.
+if [ -n "${ZSH_VERSION:-}" ] || [[ "${SHELL:-}" == */zsh ]]; then
+  PROFILE="$HOME/.zshrc"
+elif [ -f "$HOME/.bashrc" ]; then
+  PROFILE="$HOME/.bashrc"
+else
+  PROFILE="$HOME/.profile"
+fi
+
+if grep -qF "alias yagent=" "$PROFILE" 2>/dev/null; then
+  info "yagent alias already present in $PROFILE — skipping."
+else
+  printf '\n# yagent\n%s\n' "$ALIAS_LINE" >> "$PROFILE"
+  info "Added yagent alias to $PROFILE."
+  info "Run:  source $PROFILE   (or open a new terminal) to activate it."
+fi
+
+# 5. Usage -------------------------------------------------------------------
 cat <<EOF
 
 yagent installed.
 
-Quick start (isolated profile — does not touch your yazi config):
-  export PATH="$REPO/bin:\$PATH"
-  yagent ~/code/your-repo
+  yagent [dir]          open the agent dashboard in that directory
+  yagent                open in the current directory
+
+Inside: N new · a attach · s send · K kill · c clear · r refresh · g a overview
 
 Or add the plugin to your existing yazi config:
   ya pkg add adames-cognition/yagent:devin-agent
-
-Inside: N new · a attach · s send · K kill · c clear · r refresh · g a overview
 EOF
