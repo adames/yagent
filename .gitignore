@@ -5,3 +5,7 @@
 # OS / editor cruft
 .DS_Store
 *.swp
+
+# generated demo tree for screenshots/screenshots.py
+screenshots/demo-repo/
+__pycache__/

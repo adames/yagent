@@ -439,10 +439,9 @@ function M:overview()
 			break
 		end
 		local name = r.dir:match("[^/]+$") or r.dir
-		local task = (r.title ~= nil and r.title ~= "") and ("  " .. r.title) or ""
 		cands[i] = {
 			on = OVERVIEW_KEYS:sub(i, i),
-			desc = string.format("%s %-10s %s%s", GLYPHS[r.state] or "●", r.state, name, task),
+			desc = string.format("%s %s  %s", GLYPHS[r.state] or "●", name, r.state),
 		}
 	end
 

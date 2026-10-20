@@ -1,367 +1,131 @@
 # yagent
 
-**An agent-aware file manager.** `yagent` turns [yazi](https://yazi-rs.github.io/) into a
-control panel for [Devin CLI](https://docs.devin.ai/) local agents: browse your code like
-always, but now any folder can have live agents *attached* to it — and you can see at a glance
-which are working, which are done, and which need you.
+yagent turns [yazi](https://yazi-rs.github.io/), the terminal file manager, into a control
+panel for [Devin CLI](https://docs.devin.ai/) agents. You browse your repo as usual; any
+folder can have an agent *attached* to it, and the folder itself tells you whether that agent
+is working, done, or waiting on you.
 
-> Status: v0.2.x — feature-complete, in polish. Real-time updates, stale-lock cleanup, and `ya pkg` install supported.
+![Browsing a repo with three agents attached](screenshots/images/browse.png)
 
-## Screenshots
+*Three agents in `src/`: `api` is working (`●`), `auth` needs you (`◆`), `db` is done (`✓`).
+Hovering `auth` opens its panel. The chip in the header counts agents waiting for you, wherever
+you are in the tree.*
 
-**Browsing your repo — agents as an ambient layer over the file tree:**
+## The idea
 
-![yagent main view](screenshots/images/yagent-main.png)
+Running one agent is easy. Running several means cycling through terminals to find out which
+one is stuck on a question. yagent moves that information onto the thing you already look at,
+the file tree, so you can start agents, wander off, and get pulled back exactly when one needs
+you.
 
-*`api` is working (● cyan), `auth` needs you (◆ green), `db` is done (✓ gray). The header always shows how many agents need attention.*
+- **A folder is the unit.** An agent is attached to a folder, like a git status or a file size.
+  `Enter` still opens the folder; the agent is a second layer over the same tree.
+- **Glyphs are the status.** Folders with agents get a coloured glyph. Everything else is
+  plain yazi.
+- **One question matters: does this need me?** `◆ needs-you` is the only state that rings the
+  terminal bell, lights the header chip, and sorts to the top of the overview.
 
-**An agent needs your input — hover it to see what it wants:**
+| Glyph | State | Meaning | Your move |
+| - | - | - | - |
+| `●` cyan | working | thinking or running a tool | leave it alone |
+| `◆` green | **needs you** | finished a turn or asking permission | `a` to jump in |
+| `○` dim | idle | just launched, nothing yet | wait |
+| `✓` gray | done | session ended | review, then `c` to clear |
+| `·` dim / `✕` red | dead / error | process vanished or crashed | `c` to clear |
 
-![yagent needs-you state](screenshots/images/yagent-needs-you.png)
+## Install
 
-*Press `a` to drop into the agent's REPL and reply, then detach and keep browsing.*
+You need [yazi](https://yazi-rs.github.io/) (a recent release with the plugin API), the
+[Devin CLI](https://docs.devin.ai/) (`devin`), `tmux`, and `git`.
 
-**`g a` — Agents Overview, sorted by urgency:**
+    git clone https://github.com/adames/yagent.git
+    cd yagent
+    ./install.sh
+    yagent ~/code/your-repo      # new shell first, or: source ~/.zshrc
 
-![yagent overview](screenshots/images/yagent-overview.png)
+`install.sh` adds yagent's lifecycle hooks to your user-level Devin config (it backs the file
+up first and never overwrites hooks you already have), copies the helper scripts to
+`~/.local/share/yagent`, and adds a `yagent` alias to your shell profile. `yagent` launches
+yazi with an isolated `YAZI_CONFIG_HOME`, so your own yazi setup is untouched. To add the
+plugin to your existing yazi config instead, see
+[Use it inside your own yazi](#use-it-inside-your-own-yazi).
 
-*All agents ranked by urgency. Press the number key to jump to that folder.*
+## Your first agent
 
-## Why
+1. **Hover a folder and press `N`.** Describe the task in one line and press Enter.
 
-When you run several local Devin agents, the hard part isn't starting them — it's *knowing
-what they're doing without babysitting them*. `yagent` makes agents a first-class, ambient
-layer over the file tree you already navigate, so you can fire-and-forget and get pulled back
-exactly when an agent needs you.
+   ![Starting an agent on the web folder](screenshots/images/new-agent.png)
 
-## Mental model: agents are *attachments*
+2. **You land in the agent's REPL.** Each agent runs `devin` in its own tmux session, started
+   in that folder. Watch it begin, add detail if you like, then detach with `Ctrl-b d`.
 
-A folder is the unit. An agent is something **attached** to a folder — like a git status or a
-file size. A folder can have **0, 1, or many** agents attached. You never leave the
-file-browsing mental model; agents are a second navigable layer over the same tree.
+3. **Back in yazi, keep browsing.** The folder shows `○` while the agent launches and `●`
+   once it is working. Open other folders, start more agents.
 
-- **Folder axis** (`j`/`k`): normal browsing. Folders with agents get a colored glyph + a `⚑`
-  count badge.
-- **Agent axis** (`Tab`): the preview column becomes the agent panel; `j`/`k` moves through the
-  agents attached to the hovered folder.
-- `Enter` always opens the folder (unchanged). Agents are reached via the parallel gesture.
+4. **The summon.** When the agent finishes a turn or needs permission, its glyph turns `◆`,
+   the bell rings, and the header shows `◆ 1 needs you`. Hover the folder and press `a` to
+   drop back into its REPL. Detach again when you are done.
 
-## What it looks like
+5. **Finish.** When the session ends the glyph turns `✓`. Press `c` to clear it from the tree.
 
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│  my-repo  ◆ 2 needs you                                   9.2 MiB  │  ← header counter
-├──────────┬───────────────────────────────┬─────────────────────────┤
-│ .git     │                               │ Agent                   │
-│ src   ◆  │                               │ ─────────────────────── │
-│ test  ○  │  (normal yazi file list)      │  state   ◆ needs-you   │  ← preview panel
-│ docs  ·  │                               │  proc    running        │
-│ ...      │                               │  task    refactor auth  │
-│          │                               │                         │
-│          │                               │  a attach  s send  K kill│
-└──────────┴───────────────────────────────┴─────────────────────────┘
-   ↑                      ↑                           ↑
-   folder list      normal browsing              agent panel
-   with glyphs      (unchanged)                 (when you hover a
-   (◆ ○ ·)                                         folder with an agent)
-```
+`s` sends a one-off message to the agent without attaching; `K` kills it.
 
-Folders with agents get a small colored glyph in the file list:
-- `●` cyan = working | `◆` green = needs you | `○` dim = idle | `✓` gray = done | `·` dim = dead | `✕` red = error
+## Many agents at once
 
-The header counter (`◆ 2 needs you`) is always visible — even when you're deep in another folder.
+`g a` opens the Agents Overview: every agent in the repo, sorted by urgency (needs-you,
+working, idle, error, done). Press a row's number to jump to that folder, then `a` to attach.
 
-## Status model
+![Agents Overview](screenshots/images/overview.png)
 
-Five states, optimized for one question — *"does this need me?"*
+**Already inside tmux?** Attaching would nest sessions, so yagent switches your tmux client to
+the agent's session instead. `Ctrl-b L` brings you back to yazi; `Ctrl-b s` lists every
+session if you lose track.
 
-| State           | Color       | Meaning                                   | Your move          |
-|-----------------|-------------|-------------------------------------------|--------------------|
-| **Working**     | cyan        | Thinking / building, making progress      | ignore, keep going |
-| **Needs you**   | bold green  | Finished a turn, or asking permission     | **jump in**        |
-| **Idle**        | dim         | Spinning up, nothing yet                  | wait               |
-| **Done**        | gray        | Session ended / detached & complete       | review or clear    |
-| **Error**       | red         | Crashed / failed                          | investigate        |
+## Keys
 
-"Needs you" is the hero state — it drives the terminal bell, the header counter, and sort
-priority in the Agents Overview.
-
-## Keymap
-
-| Key   | Action                                                            |
-|-------|-------------------------------------------------------------------|
-| `N`   | New agent on hovered folder -> task prompt -> launch + attach     |
-| `a`   | Attach to the agent on the hovered folder (resume its REPL)       |
-| `s`   | Send a one-off prompt to a running agent                          |
-| `K`   | Kill agent (confirm)                                              |
-| `c`   | Clear a finished agent — remove done / dead / error state       |
-| `r`   | Refresh agent state (also auto-prunes stale locks)                |
-| `g a` | Agents Overview — key menu of all agents, sorted by "needs you"   |
-| `Enter` | Open folder (unchanged)                                         |
-| `Tab` | Enter / leave the agent axis — *planned*                          |
-| `I`   | New **isolated** agent (shadow worktree + sandbox) — *v0.3*       |
-
-## Tutorials
-
-### Tutorial 1: Spawn, browse, and get summoned back
-
-**Step 1 — You spot a folder that needs work**
-
-```
-┌────────────────────────────────────────────────────┐
-│  my-repo                                             │
-├──────────┬───────────────────────────────┬───────────┤
-│ .git     │                               │           │
-│ src      │  README.md                    │           │
-│ auth  ▶  │  main.rs                      │           │
-│ test     │  lib.rs                       │           │
-│ docs     │  Cargo.toml                   │           │
-└──────────┴───────────────────────────────┴───────────┘
-```
-
-You're hovering `src/auth`. It needs refactoring.
-
-**Step 2 — Press `N` and describe the task**
-
-```
-┌────────────────────────────────────────────────────┐
-│  Task for agent in auth:                           │
-│  ┌──────────────────────────────────────────────┐  │
-│  │ refactor the login flow to use async/await   │  │
-│  └──────────────────────────────────────────────┘  │
-│                    [ Enter ]  [ Cancel ]             │
-└────────────────────────────────────────────────────┘
-```
-
-**Step 3 — The agent launches and you drop into its REPL**
-
-```
-$ devin
-> refactor the login flow to use async/await
-...
-```
-
-Type your message, watch it start. When you're ready to let it work alone, detach: `Ctrl-b d`.
-
-**Step 4 — You're back in yazi. The folder now has a badge.**
-
-```
-┌────────────────────────────────────────────────────┐
-│  my-repo                                             │
-├──────────┬───────────────────────────────┬───────────┤
-│ .git     │                               │ Agent     │
-│ src   ●  │  (you keep browsing)          │ ───────── │
-│ auth  ○  │                               │  state  ○ idle   │
-│ test     │                               │  proc   running  │
-│ docs     │                               │  task   refactor │
-└──────────┴───────────────────────────────┴───────────┘
-```
-
-The badge starts as `○ idle` (spinning up), then turns `● working` as the agent thinks.
-
-**Step 5 — The summon. The badge turns `◆` and the bell rings.**
-
-```
-┌────────────────────────────────────────────────────┐
-│  my-repo  ◆ 1 needs you                            │  ← header counter appears
-├──────────┬───────────────────────────────┬───────────┤
-│ .git     │                               │ Agent     │
-│ src   ●  │                               │ ───────── │
-│ auth  ◆  │  (you're in another folder)   │  state  ◆ needs-you   │
-│ test     │                               │  proc   running       │
-│ docs     │                               │  task   refactor auth │
-└──────────┴───────────────────────────────┴───────────┘
-```
-
-Even though you're looking at a different folder, the header counter tells you someone needs attention.
-
-**Step 6 — Press `a` to jump back into the REPL**
-
-The agent is waiting for your input. You reply, detach again, and keep browsing.
-
----
-
-### Tutorial 2: Manage many agents at once
-
-You have three agents running across your repo:
-
-```
-┌────────────────────────────────────────────────────┐
-│  my-repo  ◆ 2 needs you                            │
-├──────────┬───────────────────────────────┬───────────┤
-│ .git     │                               │           │
-│ api   ●  │                               │           │
-│ auth  ◆  │                               │           │
-│ db    ✓  │                               │           │
-│ test  ◆  │                               │           │
-└──────────┴───────────────────────────────┴───────────┘
-```
-
-**Press `g a` for the Agents Overview.**
-
-```
-┌────────────────────────────────────────────────────┐
-│  Agents Overview                                     │
-│                                                      │
-│  1  ◆ needs-you   auth     refactor auth             │
-│  2  ◆ needs-you   test     write integration tests   │
-│  3  ● working     api      add rate limiting         │
-│  4  ✓ done        db       migrate users table       │
-│                                                      │
-│  Press a key to reveal that folder...               │
-└──────────────────────────────────────────────────────┘
-```
-
-Agents are sorted by urgency: `needs-you` first, then `working`, `idle`, `error`, `done`.
-
-Press `1` and yazi navigates to `src/auth`. Press `a` to attach.
-
-Later, `db` is done. Hover it and press `c`:
-
-```
-┌────────────────────────────────────────────────────┐
-│  Clear this agent?                                   │
-│                                                      │
-│  This removes the finished agent from:               │
-│  /Users/you/code/my-repo/src/db                      │
-│                                                      │
-│         [ Yes ]  [ No ]                              │
-└──────────────────────────────────────────────────────┘
-```
-
-The `✓` disappears. Your tree stays clean.
-
----
-
-### Tutorial 3: Working inside tmux
-
-If you run yazi inside tmux (recommended for long-lived agents), attaching would nest sessions. yagent handles this automatically:
-
-- Press `N` or `a` → yagent calls `tmux switch-client` instead of `attach`
-- You're now in the agent's tmux session, talking to Devin directly
-- When you're done, press `Ctrl-b L` to switch back to yazi (last session)
-
-```
-# Your tmux session tree might look like:
-├─ yazi-main     (yagent running here)
-├─ yagent-abc123 (agent on src/auth)
-├─ yagent-def456 (agent on src/api)
-└─ yagent-ghi789 (agent on src/db, done)
-```
-
-`Ctrl-b s` shows all sessions if you ever lose track.
+| Key | Action |
+| - | - |
+| `N` | New agent on the hovered folder: ask for a task, launch, attach |
+| `a` | Attach to the hovered folder's agent |
+| `s` | Send a one-off message to the agent |
+| `K` | Kill the agent (asks first) |
+| `c` | Clear a finished agent (done, dead, or error) |
+| `r` | Re-read agent state and prune stale locks |
+| `g a` | Agents Overview, sorted by urgency |
+| `Enter` | Open the folder, as always |
 
 ## How it works
 
 ```
-Devin lifecycle hooks (global)  --write-->  state files
-                                            ~/.local/state/yagent/<dirhash>.json
-scripts/agent.sh  --tmux session per agent-->  lock  .yagent/owner.json (per folder)
-                                            |
-yazi plugin reads: state file + lock + `tmux has-session` + `git -C` info
-   - file list -> glyph + badge        (ambient layer)
-   - preview   -> agent panel          (agent axis)
-   - header    -> "needs you" counter + bell
+Devin lifecycle hooks  ──write──▶  ~/.local/state/yagent/<hash of folder>.json
+agent.sh               ──starts──▶  one tmux session per agent + lock <folder>/.yagent/owner.json
+yazi plugin reads state + lock + `tmux has-session`  ──▶  glyph, agent panel, header chip
 ```
 
-- **Default mode:** agents run *in-place* on the hovered folder.
-- **Isolated mode (opt-in):** a hidden git worktree + `devin --sandbox`, still presented as
-  attached to the original folder.
-- **Backend:** one tmux session per agent; attach = drop into its REPL.
-- **Status:** Devin lifecycle hooks report state; tmux liveness is the authority for "running".
-- **Live updates:** `yagent` launches yazi with a unique `--client-id` and exports it to the
-  agents it spawns. Each lifecycle hook pushes the new state back over yazi's DDS
-  (`ya pub-to`), so badges re-color **instantly** — no polling, no manual refresh. (`r` is
-  still there as a fallback.)
+- **Hooks report, tmux decides.** Devin's `SessionStart`, `UserPromptSubmit`, `PreToolUse`,
+  `PostToolUse`, `Stop`, and `SessionEnd` hooks write the agent's state and current action.
+  Whether the tmux session is alive is the authority for "running": a dead session turns
+  working into dead and needs-you into done.
+- **Live updates, no polling.** `yagent` starts yazi with a `--client-id` and passes it to the
+  agents it launches. Every hook pushes the new state back over yazi's DDS (`ya pub-to`), so a
+  glyph recolours the moment something changes. `r` is only a fallback.
+- **Agents run in place** on the folder you hovered. Only agents started through yagent are
+  shown; ad-hoc `devin` sessions fire the same hooks but have no lock, so they are ignored.
 
-### Attaching, inside or outside tmux
-
-- **Outside tmux:** `a` (or `N`) suspends yazi and drops you into the agent's REPL; detach
-  (`Ctrl-b d`) to return.
-- **Inside tmux:** attaching would nest, so yagent instead `switch-client`s your tmux to the
-  agent's session. Return to yazi with `Ctrl-b L` (last session) or `Ctrl-b s` (session list).
-
-## Requirements
-
-- [yazi](https://yazi-rs.github.io/) (with the BETA plugin/entity API)
-- [Devin CLI](https://docs.devin.ai/) (`devin`)
-- `tmux`
-- `git`
-
-## Install
-
-### Quick start (isolated profile)
-
-Does not touch your existing yazi config:
+## Use it inside your own yazi
 
 ```sh
-./install.sh                      # installs Devin lifecycle hooks + scripts
-export PATH="$PWD/bin:$PATH"       # put the launcher on your PATH
-yagent ~/code/your-repo            # open it on a repo
+ya pkg add adames/yagent:devin-agent   # the plugin, with its shell helpers bundled
+./install.sh                           # hooks are still required for status reporting
 ```
 
-`install.sh` installs the Devin lifecycle hooks into your user-level Devin config (backing it
-up first, and never clobbering existing hooks). `bin/yagent` launches yazi with an **isolated**
-`YAZI_CONFIG_HOME` that wires in the plugin automatically.
-
-### Integrate into your existing yazi config
-
-```sh
-# 1. Install the plugin
-ya pkg add adames-cognition/yagent:devin-agent
-
-# 2. Install Devin hooks (required for status reporting)
-./install.sh
-
-# 3. Wire it into your yazi config
-```
-
-In your `~/.config/yazi/init.lua`:
+`~/.config/yazi/init.lua`:
 
 ```lua
 require("devin-agent"):setup()
 ```
 
-In your `~/.config/yazi/keymap.toml` (add the actions you want):
-
-```toml
-[[mgr.prepend_keymap]]
-on  = "N"
-run = "plugin devin-agent -- new"
-desc = "yagent: new agent on hovered folder"
-
-[[mgr.prepend_keymap]]
-on  = "a"
-run = "plugin devin-agent -- attach"
-desc = "yagent: attach to agent"
-
-[[mgr.prepend_keymap]]
-on  = "s"
-run = "plugin devin-agent -- send"
-desc = "yagent: send to agent"
-
-[[mgr.prepend_keymap]]
-on  = "K"
-run = "plugin devin-agent -- kill"
-desc = "yagent: kill agent"
-
-[[mgr.prepend_keymap]]
-on  = "c"
-run = "plugin devin-agent -- clear"
-desc = "yagent: clear finished agent"
-
-[[mgr.prepend_keymap]]
-on  = "r"
-run = "plugin devin-agent -- refresh"
-desc = "yagent: refresh agent state"
-
-[[mgr.prepend_keymap]]
-on  = ["g", "a"]
-run = "plugin devin-agent -- overview"
-desc = "yagent: agents overview"
-```
-
-In your `~/.config/yazi/yazi.toml`:
+`~/.config/yazi/yazi.toml`:
 
 ```toml
 [[plugin.prepend_fetchers]]
@@ -374,60 +138,28 @@ url = "*/"
 run = "devin-agent"
 ```
 
-## Layout
-
-```
-.
-├── devin-agent.yazi/            # yazi plugin (self-contained, installable via ya pkg)
-│   ├── main.lua                 #   fetcher + linemode badge + previewer + actions
-│   ├── README.md
-│   ├── LICENSE
-│   └── scripts/                 #   shell helpers bundled with the plugin
-│       ├── agents.sh            #     query status: list | get | prune
-│       ├── agent.sh             #     manage an agent: start / attach / send / kill
-│       ├── statedir.sh          #     dir -> state-file path helper
-│       └── worktree.sh          #     isolated-mode shadow worktrees (v0.3)
-├── bin/yagent                   # launcher: isolated yazi profile
-├── hooks/
-│   ├── devin-status-hook.sh     # Devin lifecycle hook dispatcher
-│   └── hooks.json
-├── config/                      # isolated yazi profile (used by bin/yagent)
-│   ├── yazi.toml
-│   ├── keymap.toml
-│   ├── init.lua
-│   └── theme.toml
-├── scripts -> devin-agent.yazi/scripts   # backward-compat symlink
-├── install.sh                   # install hooks + scripts globally
-└── README.md
-```
+`~/.config/yazi/keymap.toml`: copy the bindings you want from
+[`config/keymap.toml`](config/keymap.toml). Each one runs `plugin devin-agent -- <action>`
+with `new`, `attach`, `send`, `kill`, `clear`, `refresh`, or `overview`.
 
 ## Troubleshooting
 
-| Symptom | Likely cause | Fix |
-|---------|-------------|-----|
-| "Scripts not found" toast | Plugin installed via `ya pkg` but `install.sh` not run | Run `./install.sh` to set up hooks and global scripts |
-| "yagent needs tmux" | tmux not on PATH | `brew install tmux` (or your package manager) |
-| "yagent needs devin" | Devin CLI not on PATH | Follow [docs.devin.ai](https://docs.devin.ai/) to install |
-| Agent badge stays after process died | Stale lock wasn't pruned yet | Press `r` (refresh) — it auto-prunes dead sessions |
-| No live badge updates | `YAGENT_YAZI_ID` not propagated | Make sure you launch agents through yagent (not a separate terminal) |
-| Hooks not firing | Another tool already owns `hooks` in Devin config | Merge `hooks.json` manually into `~/.config/devin/config.json` |
+| Symptom | Cause | Fix |
+| - | - | - |
+| "Can't find yagent scripts" toast | Plugin installed with `ya pkg` but `install.sh` never ran | Run `./install.sh` |
+| "yagent needs tmux" / "needs the Devin CLI" | Binary not on `PATH` | `brew install tmux`; see [docs.devin.ai](https://docs.devin.ai/) for `devin` |
+| Glyph stays after the agent died | Stale lock | Press `r`; it prunes dead sessions |
+| Glyphs don't update live | Agent started outside yagent, so it never got `YAGENT_YAZI_ID` | Start agents with `N` |
+| Hooks never fire | Another tool owns `hooks` in `~/.config/devin/config.json` | Merge [`hooks/hooks.json`](hooks/hooks.json) by hand |
 
 ## Roadmap
 
-- **v0.1 (MVP):** in-place agent on hovered folder, glyphs + badges, agent panel,
-  `N`/`a`/`s`/`K`/`r`, hook-driven status.
-- **v0.2 (done):** real-time badge updates via DDS push; nested-tmux attach via `switch-client`;
-  "needs you" bell + header counter; live preview-panel refresh; `g a` Agents Overview.
-- **v0.2.x (done):** robustness (stale-lock pruning, missing-binary checks, `clear` action);
-  `ya pkg` packaging (self-contained plugin with bundled scripts).
-- **v0.3:** isolated mode (shadow worktrees), multiple agents per folder, `--sandbox`,
-  conflict hints.
-- **v0.4:** themeable colors/config, desktop notifications, docs.
+- **v0.3:** isolated mode (a hidden git worktree plus `devin --sandbox`, still shown on the
+  original folder), several agents per folder, conflict hints.
+- **v0.4:** themeable colours, desktop notifications.
+
+The screenshots above are generated with `python3 screenshots/screenshots.py`.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
-
----
-
-**Test PR for reproduction testing**
+MIT, see [LICENSE](LICENSE).

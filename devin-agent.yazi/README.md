@@ -21,11 +21,11 @@ attach to, send commands to, or kill agents without leaving yazi.
 ### Via `ya pkg` (recommended for existing yazi users)
 
 ```sh
-ya pkg add adames-cognition/yagent:devin-agent
+ya pkg add adames/yagent:devin-agent
 ```
 
 Then wire it into your `~/.config/yazi/init.lua`, `keymap.toml`, and `yazi.toml`
-(see the [main README](../../README.md) for full snippets).
+(see the [main README](../README.md) for full snippets).
 
 You also need to run `./install.sh` once to set up the Devin lifecycle hooks.
 

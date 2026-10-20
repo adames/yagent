@@ -97,5 +97,5 @@ yagent installed.
 Inside: N new · a attach · s send · K kill · c clear · r refresh · g a overview
 
 Or add the plugin to your existing yazi config:
-  ya pkg add adames-cognition/yagent:devin-agent
+  ya pkg add adames/yagent:devin-agent
 EOF
