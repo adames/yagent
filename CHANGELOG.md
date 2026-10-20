@@ -5,9 +5,9 @@
 ### Changed
 
 - **Repository moved** to `github.com/adames/yagent`; the plugin is now `ya pkg add adames/yagent:devin-agent`.
-- **Agents Overview rows are folder-first** (`◆ auth  needs-you`). yazi's which-key popup truncates each row to about 19 characters at 100 columns, so the task title (still shown in the agent panel) no longer pushes the folder name off the row.
+- **Agents Overview rows are folder-first** (`◆ auth  needs-you`). yazi's which-key popup cuts rows at about 19 characters (at 100 columns), so the task title was pushing the folder name off the row. The title is still in the agent panel.
 - **README rewritten** as a short walkthrough with real screenshots instead of ASCII mockups.
-- **Screenshots are rendered, not captured.** `screenshots/screenshots.py` drives yagent in a 100x14 tmux pane, reads the pane back with its colours, and renders it to PNG through an SVG terminal window; it replaces the iTerm/`screencapture` scripts.
+- **Screenshots are rendered, not captured.** `screenshots/screenshots.py` drives yagent in a 100x14 tmux pane, reads the pane back with its colors, and renders it to PNG through an SVG terminal window; it replaces the iTerm/`screencapture` scripts.
 
 ## v0.2.x — Robustness & Packaging
 

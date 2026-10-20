@@ -14,13 +14,13 @@ you are in the tree.*
 ## The idea
 
 Running one agent is easy. Running several means cycling through terminals to find out which
-one is stuck on a question. yagent moves that information onto the thing you already look at,
-the file tree, so you can start agents, wander off, and get pulled back exactly when one needs
+one is stuck on a question. yagent puts that information on the thing you're already looking
+at — the file tree — so you can start agents, wander off, and get pulled back when one needs
 you.
 
 - **A folder is the unit.** An agent is attached to a folder, like a git status or a file size.
   `Enter` still opens the folder; the agent is a second layer over the same tree.
-- **Glyphs are the status.** Folders with agents get a coloured glyph. Everything else is
+- **Glyphs are the status.** Folders with agents get a colored glyph. Everything else is
   plain yazi.
 - **One question matters: does this need me?** `◆ needs-you` is the only state that rings the
   terminal bell, lights the header chip, and sorts to the top of the overview.
@@ -104,19 +104,19 @@ yazi plugin reads state + lock + `tmux has-session`  ──▶  glyph, agent pan
 
 - **Hooks report, tmux decides.** Devin's `SessionStart`, `UserPromptSubmit`, `PreToolUse`,
   `PostToolUse`, `Stop`, and `SessionEnd` hooks write the agent's state and current action.
-  Whether the tmux session is alive is the authority for "running": a dead session turns
-  working into dead and needs-you into done.
+  tmux is the authority on whether an agent is actually running: if its session is gone,
+  working becomes dead and needs-you becomes done.
 - **Live updates, no polling.** `yagent` starts yazi with a `--client-id` and passes it to the
   agents it launches. Every hook pushes the new state back over yazi's DDS (`ya pub-to`), so a
-  glyph recolours the moment something changes. `r` is only a fallback.
-- **Agents run in place** on the folder you hovered. Only agents started through yagent are
+  glyph recolors the moment something changes. `r` is only a fallback.
+- **Agents run in place**, in the folder you hovered. Only agents started through yagent are
   shown; ad-hoc `devin` sessions fire the same hooks but have no lock, so they are ignored.
 
 ## Use it inside your own yazi
 
 ```sh
 ya pkg add adames/yagent:devin-agent   # the plugin, with its shell helpers bundled
-./install.sh                           # hooks are still required for status reporting
+./install.sh                           # from a clone of this repo: installs the Devin hooks
 ```
 
 `~/.config/yazi/init.lua`:
@@ -156,9 +156,12 @@ with `new`, `attach`, `send`, `kill`, `clear`, `refresh`, or `overview`.
 
 - **v0.3:** isolated mode (a hidden git worktree plus `devin --sandbox`, still shown on the
   original folder), several agents per folder, conflict hints.
-- **v0.4:** themeable colours, desktop notifications.
+- **v0.4:** themeable colors, desktop notifications.
 
-The screenshots above are generated with `python3 screenshots/screenshots.py`.
+## Development
+
+Screenshots are rendered, not captured: `python3 screenshots/screenshots.py` drives yazi in
+tmux and writes `screenshots/images/`.
 
 ## License
 

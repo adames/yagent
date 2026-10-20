@@ -1,46 +1,34 @@
 # devin-agent.yazi
 
-A [yazi](https://yazi-rs.github.io/) plugin that turns your file manager into a control panel for
-[Devin CLI](https://docs.devin.ai/) agents.
+The [yazi](https://yazi-rs.github.io/) plugin behind [yagent](../README.md). It shows a status
+glyph next to any folder with a [Devin CLI](https://docs.devin.ai/) agent attached, opens an
+agent panel when you hover that folder, and lets you start, attach to, message, or kill agents
+without leaving yazi.
 
-It renders a small colored glyph next to any folder that has an active agent,
-shows an agent detail panel when you hover that folder, and lets you spawn,
-attach to, send commands to, or kill agents without leaving yazi.
+Glyphs: `●` working · `◆` needs you · `○` idle · `✓` done · `·` dead · `✕` error
 
-## What it does
-
-- **Ambient awareness** — as you browse, folders with agents get a colored badge:
-  - `●` cyan = working, `◆` green = needs you, `○` dim = idle, `✓` gray = done, `✕` red = error
-- **Live updates** — Devin hooks push state changes over DDS, so badges re-color instantly
-- **Agent panel** — hover a folder with an agent to see its state, current action, and task
-- **Header counter** — always-visible "N needs you" chip so you never miss an agent waiting for input
-- **Actions** — `N` new, `a` attach, `s` send, `K` kill, `c` clear, `r` refresh, `g a` overview
+Keys: `N` new · `a` attach · `s` send · `K` kill · `c` clear · `r` refresh · `g a` overview
 
 ## Install
 
-### Via `ya pkg` (recommended for existing yazi users)
+Into your own yazi:
 
 ```sh
 ya pkg add adames/yagent:devin-agent
 ```
 
-Then wire it into your `~/.config/yazi/init.lua`, `keymap.toml`, and `yazi.toml`
-(see the [main README](../README.md) for full snippets).
+Then wire it into `init.lua`, `yazi.toml`, and `keymap.toml` as shown in the
+[main README](../README.md#use-it-inside-your-own-yazi). The Devin hooks are still needed for
+status reporting: run `./install.sh` once from a clone of this repo.
 
-You also need to run `./install.sh` once to set up the Devin lifecycle hooks.
-
-### Via the isolated launcher
+Or use the isolated launcher, which comes with the plugin already wired in:
 
 ```sh
 ./install.sh
-export PATH="$PWD/bin:$PATH"
-yagent ~/code/your-repo
+yagent ~/code/your-repo      # new shell first, or: source ~/.zshrc
 ```
 
-This launches yazi in an isolated profile that already has the plugin wired in.
+## Scripts
 
-## Self-contained
-
-The shell scripts (`agents.sh`, `agent.sh`, etc.) live in `scripts/` inside this
-directory. The plugin discovers them automatically, or respects `$YAGENT_SCRIPTS`
-if you want to override the location.
+The shell helpers (`agent.sh`, `agents.sh`, ...) live in `scripts/` here. The plugin looks for
+them in `$YAGENT_SCRIPTS`, then next to this file, then `~/.local/share/yagent/scripts`.

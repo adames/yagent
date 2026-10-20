@@ -6,7 +6,10 @@
 #   2. Installs the Devin lifecycle hooks into your user-level Devin config
 #      (~/.config/devin/config.json) so every agent reports its state. Your
 #      existing config is backed up; existing hooks are never clobbered.
-#   3. Prints how to put `yagent` on your PATH.
+#   3. Copies the helper scripts to ~/.local/share/yagent/scripts so the
+#      plugin works without the launcher (for `ya pkg` installs).
+#   4. Adds a `yagent` alias to your shell profile.
+#   5. Prints a short usage summary.
 #
 # The yazi side needs no install step: `bin/yagent` launches yazi with an
 # isolated config (YAZI_CONFIG_HOME) that wires in the plugin automatically, so
@@ -91,8 +94,7 @@ cat <<EOF
 
 yagent installed.
 
-  yagent [dir]          open the agent dashboard in that directory
-  yagent                open in the current directory
+  yagent [dir]    open yazi on dir (default: current directory)
 
 Inside: N new · a attach · s send · K kill · c clear · r refresh · g a overview
 
